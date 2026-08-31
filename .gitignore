@@ -1,0 +1,15 @@
+# Python freeze build
+scripts/freeze-markitdown/.venv/
+scripts/freeze-markitdown/build/
+scripts/freeze-markitdown/dist/
+
+# Xcode / Swift
+*.xcodeproj
+.build/
+DerivedData/
+build/
+dist/
+*.xcresult
+
+# macOS
+.DS_Store
