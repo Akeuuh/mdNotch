@@ -28,7 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let settingsWindow = SettingsWindowController(settings: settings)
         self.settingsWindow = settingsWindow
 
-        statusBar = StatusBarController(onSettings: { [weak self] in
+        statusBar = StatusBarController(settings: settings, onSettings: { [weak self] in
             self?.settingsWindow?.show()
         })
 
@@ -58,6 +58,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             defer { isConverting = false }
             let result = await pipeline.process(urls: urls, settings: pipelineSettings)
 
+            guard !result.files.isEmpty else {
+                notch.collapseNow()
+                return
+            }
+
             if let payload = result.clipboardPayload {
                 let pasteboard = NSPasteboard.general
                 pasteboard.clearContents()
@@ -77,8 +82,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         result.failures.compactMap { file -> String? in
             guard case .failure(let error) = file.outcome else { return nil }
             switch error {
-            case .unsupportedFormat:
-                return String(localized: "Unsupported format")
+            case .unsupportedFormat(let fileName):
+                return String(localized: "Unsupported format: \(fileName)")
             case .conversionFailed(let fileName, _):
                 return String(localized: "Conversion failed: \(fileName)")
             case .timedOut(let fileName):

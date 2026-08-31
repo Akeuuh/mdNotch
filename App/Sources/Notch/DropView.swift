@@ -6,6 +6,9 @@ final class DropView: NSView {
     var onDragExited: (() -> Void)?
     var onFilesDropped: (([URL]) -> Void)?
     var onClicked: (() -> Void)?
+    /// When false, drags are refused (no-drop cursor) instead of silently
+    /// swallowed — e.g. while a conversion is already running.
+    var canAcceptDrop: (() -> Bool)?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -16,6 +19,7 @@ final class DropView: NSView {
     required init?(coder: NSCoder) { fatalError("not used") }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard canAcceptDrop?() ?? true else { return [] }
         onDragEntered?()
         return .copy
     }
@@ -29,6 +33,7 @@ final class DropView: NSView {
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        guard canAcceptDrop?() ?? true else { return false }
         let urls = sender.draggingPasteboard.readObjects(
             forClasses: [NSURL.self],
             options: [.urlReadingFileURLsOnly: true]

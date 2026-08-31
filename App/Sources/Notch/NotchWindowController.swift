@@ -42,6 +42,10 @@ final class NotchWindowController {
         dropView.onFilesDropped = { [weak self] urls in
             self?.handleDrop(urls)
         }
+        dropView.canAcceptDrop = { [weak self] in
+            guard let self else { return false }
+            return self.state.phase == .idle || self.isDropTarget || self.state.phase == .settingsHover
+        }
         dropView.onClicked = { [weak self] in
             guard let self else { return }
             switch self.state.phase {
@@ -111,9 +115,7 @@ final class NotchWindowController {
         if inside, let screen {
             // The gear only appears from rest.
             guard state.phase == .idle else { return }
-            panel.setFrame(NotchGeometry.windowFrame(on: screen), display: true)
-            panel.ignoresMouseEvents = false
-            panel.orderFrontRegardless()
+            reveal(on: screen)
             state.phase = .settingsHover
         } else if state.phase == .settingsHover {
             collapse()
@@ -124,15 +126,20 @@ final class NotchWindowController {
         if near, let screen {
             // Never interrupt an ongoing conversion or its feedback.
             guard state.phase == .idle || isDropTarget || state.phase == .settingsHover else { return }
-            panel.setFrame(NotchGeometry.windowFrame(on: screen), display: true)
-            panel.ignoresMouseEvents = false
-            panel.orderFrontRegardless()
+            reveal(on: screen)
             if state.phase == .idle || state.phase == .settingsHover {
                 state.phase = .dropTarget(hovering: false)
             }
         } else if isDropTarget {
             collapse()
         }
+    }
+
+    /// Positions the panel on `screen` and makes it interactive.
+    private func reveal(on screen: NSScreen) {
+        panel.setFrame(NotchGeometry.windowFrame(on: screen), display: true)
+        panel.ignoresMouseEvents = false
+        panel.orderFrontRegardless()
     }
 
     private func dragEnded() {

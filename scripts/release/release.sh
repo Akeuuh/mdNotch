@@ -54,22 +54,25 @@ APP_SRC="$DIST/DerivedData/Build/Products/Release/mdNotch.app"
 APP="$DIST/mdNotch.app"
 ditto "$APP_SRC" "$APP"
 
+sign() {
+    codesign --force --options runtime --timestamp \
+        --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$1"
+}
+
+notarize() {
+    xcrun notarytool submit "$1" --keychain-profile "$NOTARY_PROFILE" --wait
+    xcrun stapler staple "$2"
+}
+
 echo "==> Signing every Mach-O of the frozen bundle (dylibs, .so, executables)"
 # PyInstaller produces hundreds of dylibs; notarization requires each one
 # to be signed. Sign inside-out: nested code first, main executable last.
-find "$APP/Contents/Resources/markitdown-bin" -type f \
-    \( -name "*.dylib" -o -name "*.so" \) -print0 |
-    while IFS= read -r -d '' lib; do
-        codesign --force --options runtime --timestamp \
-            --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$lib"
-    done
-# Any remaining Mach-O executables in the bundle (incl. Python, markitdown-bin).
-find "$APP/Contents/Resources/markitdown-bin" -type f ! -name "*.dylib" ! -name "*.so" -print0 |
+find "$APP/Contents/Resources/markitdown-bin" -type f -print0 |
     while IFS= read -r -d '' f; do
-        if file -b "$f" | grep -q "Mach-O"; then
-            codesign --force --options runtime --timestamp \
-                --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$f"
-        fi
+        case "$f" in
+            *.dylib|*.so) sign "$f" ;;
+            *) file -b "$f" | grep -q "Mach-O" && sign "$f" || true ;;
+        esac
     done
 
 echo "==> Signing the app"
@@ -81,9 +84,7 @@ codesign --verify --strict --deep --verbose=2 "$APP"
 if [[ $SKIP_NOTARIZE -eq 0 ]]; then
     echo "==> Notarizing"
     ditto -c -k --keepParent "$APP" "$DIST/mdNotch.zip"
-    xcrun notarytool submit "$DIST/mdNotch.zip" \
-        --keychain-profile "$NOTARY_PROFILE" --wait
-    xcrun stapler staple "$APP"
+    notarize "$DIST/mdNotch.zip" "$APP"
 
     echo "==> Gatekeeper assessment"
     spctl --assess --type execute --verbose "$APP"
@@ -99,9 +100,7 @@ ln -s /Applications "$DMG_ROOT/Applications"
 hdiutil create -volname "mdNotch" -srcfolder "$DMG_ROOT" -ov -format UDZO \
     "$DIST/mdNotch.dmg"
 if [[ $SKIP_NOTARIZE -eq 0 ]]; then
-    xcrun notarytool submit "$DIST/mdNotch.dmg" \
-        --keychain-profile "$NOTARY_PROFILE" --wait
-    xcrun stapler staple "$DIST/mdNotch.dmg"
+    notarize "$DIST/mdNotch.dmg" "$DIST/mdNotch.dmg"
 fi
 
 echo "==> Done: $DIST/mdNotch.dmg"

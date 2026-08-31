@@ -17,10 +17,8 @@ final class RealBinaryConversionTests: XCTestCase {
         outputDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("mdnotch-integration-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
-        pipeline = ConversionPipeline(
-            converter: SubprocessMarkdownConverter(binaryURL: binary),
-            timeout: .seconds(120)
-        )
+        // Production timeout (60 s default) — the suite must pass within it.
+        pipeline = ConversionPipeline(converter: SubprocessMarkdownConverter(binaryURL: binary))
     }
 
     override func tearDownWithError() throws {

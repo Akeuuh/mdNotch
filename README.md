@@ -4,6 +4,10 @@ macOS app living under the notch: drag documents onto the top of the screen,
 they're converted to Markdown — copied to the clipboard and saved as `.md`
 files. Offline, zero dependencies to install. See `SPEC.md` and `PRD.md`.
 
+The app embeds a frozen [markitdown](https://github.com/microsoft/markitdown)
+binary (~179 MB) — the accepted cost of requiring no Python on the user's
+machine (SPEC.md §1).
+
 ## Building
 
 ```bash
