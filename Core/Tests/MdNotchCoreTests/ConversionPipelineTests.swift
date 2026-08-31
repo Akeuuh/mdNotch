@@ -148,4 +148,98 @@ final class ConversionPipelineTests: XCTestCase {
         }
         XCTAssertEqual(fileName, "slow.pdf")
     }
+
+    // MARK: - Multi-drop
+
+    func testMultiDropWritesOneFilePerSourceAndConcatenatesClipboard() async throws {
+        let a = try makeSourceFile(named: "alpha.pdf")
+        let b = try makeSourceFile(named: "beta.docx")
+        let pipeline = ConversionPipeline(converter: FakeConverter { url in
+            "content of \(url.lastPathComponent)"
+        })
+
+        let result = await pipeline.process(urls: [a, b], settings: PipelineSettings())
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: tempDir.appendingPathComponent("alpha.md").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: tempDir.appendingPathComponent("beta.md").path))
+        XCTAssertEqual(
+            result.clipboardPayload,
+            "# alpha.pdf\n\ncontent of alpha.pdf\n\n# beta.docx\n\ncontent of beta.docx"
+        )
+    }
+
+    func testClipboardOrderMatchesDropOrder() async throws {
+        let names = ["c.pdf", "a.pdf", "b.pdf"]
+        var urls: [URL] = []
+        for name in names {
+            urls.append(try makeSourceFile(named: name))
+        }
+        let pipeline = ConversionPipeline(converter: FakeConverter { "md:\($0.lastPathComponent)" })
+
+        let result = await pipeline.process(urls: urls, settings: PipelineSettings())
+
+        XCTAssertEqual(
+            result.clipboardPayload,
+            "# c.pdf\n\nmd:c.pdf\n\n# a.pdf\n\nmd:a.pdf\n\n# b.pdf\n\nmd:b.pdf"
+        )
+    }
+
+    func testNameConflictGetsAutoSuffixWithoutOverwriting() async throws {
+        let source = try makeSourceFile(named: "rapport.pdf")
+        let existing = tempDir.appendingPathComponent("rapport.md")
+        try "existing".write(to: existing, atomically: true, encoding: .utf8)
+        let pipeline = ConversionPipeline(converter: FakeConverter(markdown: "# new"))
+
+        let first = await pipeline.process(urls: [source], settings: PipelineSettings())
+        let second = await pipeline.process(urls: [source], settings: PipelineSettings())
+
+        XCTAssertEqual(try String(contentsOf: existing, encoding: .utf8), "existing", "must never overwrite")
+        guard case .success(_, let firstURL) = first.files[0].outcome,
+              case .success(_, let secondURL) = second.files[0].outcome else {
+            return XCTFail("expected successes")
+        }
+        XCTAssertEqual(firstURL.lastPathComponent, "rapport-1.md")
+        XCTAssertEqual(secondURL.lastPathComponent, "rapport-2.md")
+        XCTAssertEqual(try String(contentsOf: firstURL, encoding: .utf8), "# new")
+        XCTAssertEqual(try String(contentsOf: secondURL, encoding: .utf8), "# new")
+    }
+
+    func testMixedBatchConvertsSuccessesAndReportsFailures() async throws {
+        let good = try makeSourceFile(named: "good.pdf")
+        let unsupported = try makeSourceFile(named: "photo.png")
+        let bad = try makeSourceFile(named: "corrupt.docx")
+        let pipeline = ConversionPipeline(converter: FakeConverter { url in
+            if url.lastPathComponent == "corrupt.docx" { throw FakeFailure() }
+            return "# good content"
+        })
+
+        let result = await pipeline.process(urls: [good, unsupported, bad], settings: PipelineSettings())
+
+        XCTAssertEqual(result.successes.map(\.sourceURL.lastPathComponent), ["good.pdf"])
+        XCTAssertEqual(
+            result.failures.map(\.sourceURL.lastPathComponent).sorted(),
+            ["corrupt.docx", "photo.png"]
+        )
+        // Successes still reach the clipboard and disk.
+        XCTAssertEqual(result.clipboardPayload, "# good content")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: tempDir.appendingPathComponent("good.md").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: tempDir.appendingPathComponent("corrupt.md").path))
+    }
+
+    func testFixedFolderDestinationReceivesAllOutputs() async throws {
+        let dest = tempDir.appendingPathComponent("outbox")
+        try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
+        let a = try makeSourceFile(named: "one.pdf")
+        let b = try makeSourceFile(named: "two.pdf")
+        let pipeline = ConversionPipeline(converter: FakeConverter(markdown: "# md"))
+
+        let result = await pipeline.process(
+            urls: [a, b],
+            settings: PipelineSettings(destination: .fixedFolder(dest))
+        )
+
+        XCTAssertEqual(result.successes.count, 2)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dest.appendingPathComponent("one.md").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dest.appendingPathComponent("two.md").path))
+    }
 }

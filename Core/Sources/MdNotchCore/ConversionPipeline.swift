@@ -20,13 +20,7 @@ public struct ConversionPipeline: Sendable {
             files.append(await processOne(url: url, settings: settings))
         }
 
-        let successes = files.compactMap { file -> String? in
-            if case .success(let markdown, _) = file.outcome { return markdown }
-            return nil
-        }
-        let payload = successes.isEmpty ? nil : successes.joined()
-
-        return PipelineResult(files: files, clipboardPayload: payload)
+        return PipelineResult(files: files, clipboardPayload: Self.clipboardPayload(for: files))
     }
 
     private func processOne(url: URL, settings: PipelineSettings) async -> FileConversionResult {
@@ -71,6 +65,28 @@ public struct ConversionPipeline: Sendable {
         }
     }
 
+    /// Successful markdowns in drop order. A single success goes to the
+    /// clipboard as-is; several are concatenated with a `# file-name`
+    /// separator before each content.
+    private static func clipboardPayload(for files: [FileConversionResult]) -> String? {
+        let successes = files.compactMap { file -> (name: String, markdown: String)? in
+            if case .success(let markdown, _) = file.outcome {
+                return (file.sourceURL.lastPathComponent, markdown)
+            }
+            return nil
+        }
+        switch successes.count {
+        case 0:
+            return nil
+        case 1:
+            return successes[0].markdown
+        default:
+            return successes
+                .map { "# \($0.name)\n\n\($0.markdown)" }
+                .joined(separator: "\n\n")
+        }
+    }
+
     private func write(markdown: String, for source: URL, settings: PipelineSettings) throws -> URL {
         let directory: URL
         switch settings.destination {
@@ -80,8 +96,27 @@ public struct ConversionPipeline: Sendable {
             directory = folder
         }
         let baseName = source.deletingPathExtension().lastPathComponent
-        let outputURL = directory.appendingPathComponent(baseName).appendingPathExtension("md")
+        let outputURL = Self.availableURL(in: directory, baseName: baseName)
         try markdown.write(to: outputURL, atomically: true, encoding: .utf8)
         return outputURL
+    }
+
+    /// First free `.md` path: `name.md`, then `name-1.md`, `name-2.md`...
+    /// Never overwrites, never asks.
+    private static func availableURL(in directory: URL, baseName: String) -> URL {
+        let plain = directory.appendingPathComponent(baseName).appendingPathExtension("md")
+        if !FileManager.default.fileExists(atPath: plain.path) {
+            return plain
+        }
+        var index = 1
+        while true {
+            let candidate = directory
+                .appendingPathComponent("\(baseName)-\(index)")
+                .appendingPathExtension("md")
+            if !FileManager.default.fileExists(atPath: candidate.path) {
+                return candidate
+            }
+            index += 1
+        }
     }
 }
