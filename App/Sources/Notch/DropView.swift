@@ -5,6 +5,7 @@ final class DropView: NSView {
     var onDragEntered: (() -> Void)?
     var onDragExited: (() -> Void)?
     var onFilesDropped: (([URL]) -> Void)?
+    var onClicked: (() -> Void)?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -21,6 +22,10 @@ final class DropView: NSView {
 
     override func draggingExited(_ sender: NSDraggingInfo?) {
         onDragExited?()
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        onClicked?()
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {

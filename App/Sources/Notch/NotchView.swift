@@ -40,6 +40,21 @@ struct NotchView: View {
                     }
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
+            case .failure(let message):
+                zone(glowing: false) {
+                    VStack(spacing: 4) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 22, weight: .medium))
+                            .foregroundStyle(.red)
+                        Text(message)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.white)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 12)
+                    }
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

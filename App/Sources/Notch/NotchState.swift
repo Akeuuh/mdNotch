@@ -14,6 +14,9 @@ final class NotchState: ObservableObject {
         case converting
         /// Conversion succeeded: green check + "Copied", then auto-collapse.
         case success
+        /// At least one file failed: red cross + short message(s).
+        /// Collapses on click or after ~4 s.
+        case failure(message: String)
     }
 
     @Published var phase: Phase = .idle

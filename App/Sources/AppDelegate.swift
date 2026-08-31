@@ -54,10 +54,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if result.failures.isEmpty && !result.files.isEmpty {
                 notch.showSuccess()
             } else {
-                // Minimal handling for now; full error UI comes with the
-                // format-gating milestone.
-                notch.collapseNow()
+                notch.showFailure(message: Self.failureMessage(for: result))
             }
         }
+    }
+
+    /// Short user-facing message covering every failed file of a drop.
+    static func failureMessage(for result: PipelineResult) -> String {
+        result.failures.compactMap { file -> String? in
+            guard case .failure(let error) = file.outcome else { return nil }
+            switch error {
+            case .unsupportedFormat:
+                return String(localized: "Unsupported format")
+            case .conversionFailed(let fileName, _):
+                return String(localized: "Conversion failed: \(fileName)")
+            case .timedOut(let fileName):
+                return String(localized: "Conversion timed out: \(fileName)")
+            }
+        }
+        .joined(separator: " · ")
     }
 }

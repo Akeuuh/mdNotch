@@ -40,6 +40,12 @@ final class NotchWindowController {
         dropView.onFilesDropped = { [weak self] urls in
             self?.handleDrop(urls)
         }
+        dropView.onClicked = { [weak self] in
+            // Error feedback collapses on click.
+            if case .failure = self?.state.phase {
+                self?.collapse()
+            }
+        }
 
         let hosting = NSHostingView(rootView: NotchView(state: state))
         hosting.autoresizingMask = [.width, .height]
@@ -74,6 +80,13 @@ final class NotchWindowController {
     func showSuccess() {
         state.phase = .success
         scheduleCollapse(after: 2)
+    }
+
+    /// Call when at least one file failed: red cross + message,
+    /// collapse on click or after ~4 s.
+    func showFailure(message: String) {
+        state.phase = .failure(message: message)
+        scheduleCollapse(after: 4)
     }
 
     func collapseNow() {
