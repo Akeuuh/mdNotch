@@ -11,6 +11,7 @@ final class NotchWindowController {
 
     private let panel: NSPanel
     private let dragMonitor = DragMonitor()
+    private var collapseTask: Task<Void, Never>?
 
     init() {
         panel = NotchPanel(
@@ -29,10 +30,12 @@ final class NotchWindowController {
 
         let dropView = DropView(frame: .zero)
         dropView.onDragEntered = { [weak self] in
-            self?.state.phase = .dropTarget(hovering: true)
+            guard let self, self.state.phase == .idle || self.isDropTarget else { return }
+            self.state.phase = .dropTarget(hovering: true)
         }
         dropView.onDragExited = { [weak self] in
-            self?.state.phase = .dropTarget(hovering: false)
+            guard let self, self.isDropTarget else { return }
+            self.state.phase = .dropTarget(hovering: false)
         }
         dropView.onFilesDropped = { [weak self] urls in
             self?.handleDrop(urls)
@@ -60,15 +63,34 @@ final class NotchWindowController {
         panel.orderFrontRegardless()
     }
 
+    /// Call when dropped files start converting: spinner + glow.
+    func beginConversion() {
+        collapseTask?.cancel()
+        state.phase = .converting
+    }
+
+    /// Call when the pipeline finished. Success: green check + "Copied",
+    /// auto-collapse after ~2 s.
+    func showSuccess() {
+        state.phase = .success
+        scheduleCollapse(after: 2)
+    }
+
+    func collapseNow() {
+        collapse()
+    }
+
     private func dragMoved(near: Bool, screen: NSScreen?) {
         if near, let screen {
+            // Never interrupt an ongoing conversion or its feedback.
+            guard state.phase == .idle || isDropTarget else { return }
             panel.setFrame(NotchGeometry.windowFrame(on: screen), display: true)
             panel.ignoresMouseEvents = false
             panel.orderFrontRegardless()
             if state.phase == .idle {
                 state.phase = .dropTarget(hovering: false)
             }
-        } else if case .dropTarget = state.phase {
+        } else if isDropTarget {
             collapse()
         }
     }
@@ -76,17 +98,31 @@ final class NotchWindowController {
     private func dragEnded() {
         // Mouse released outside our panel: a drop on the panel itself is
         // delivered via DropView before/independently of this.
-        if case .dropTarget = state.phase {
+        if isDropTarget {
             collapse()
         }
     }
 
+    private var isDropTarget: Bool {
+        if case .dropTarget = state.phase { return true }
+        return false
+    }
+
     private func handleDrop(_ urls: [URL]) {
         onFilesDropped?(urls)
-        collapse()
+    }
+
+    private func scheduleCollapse(after seconds: Double) {
+        collapseTask?.cancel()
+        collapseTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled else { return }
+            self?.collapse()
+        }
     }
 
     private func collapse() {
+        collapseTask?.cancel()
         state.phase = .idle
         panel.ignoresMouseEvents = true
     }

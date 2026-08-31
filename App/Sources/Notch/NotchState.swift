@@ -10,6 +10,10 @@ final class NotchState: ObservableObject {
         /// A file drag is near the top-center: the drop zone is extended.
         /// `hovering` is true while the drag is directly over the zone.
         case dropTarget(hovering: Bool)
+        /// Files were dropped, conversion is running (spinner + glow).
+        case converting
+        /// Conversion succeeded: green check + "Copied", then auto-collapse.
+        case success
     }
 
     @Published var phase: Phase = .idle

@@ -4,12 +4,22 @@ options:
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
+packages:
+  MdNotchCore:
+    path: Core
 targets:
   mdNotch:
     type: application
     platform: macOS
     sources:
       - App/Sources
+      # Frozen markitdown binary (built by scripts/freeze-markitdown/build.sh),
+      # copied as a folder reference into Resources/markitdown-bin/.
+      - path: scripts/freeze-markitdown/dist/markitdown-bin
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: MdNotchCore
     info:
       path: App/Info.plist
       properties:
