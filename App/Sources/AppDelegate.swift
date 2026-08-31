@@ -7,6 +7,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBar: StatusBarController?
     private var notch: NotchWindowController?
     private var pipeline: ConversionPipeline?
+    private var settings: AppSettings?
+    private var settingsWindow: SettingsWindowController?
     private var isConverting = false
 
     static func main() {
@@ -21,7 +23,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // behavior correct when launched from Xcode or a debug build.
         NSApp.setActivationPolicy(.accessory)
 
-        statusBar = StatusBarController()
+        let settings = AppSettings()
+        self.settings = settings
+        let settingsWindow = SettingsWindowController(settings: settings)
+        self.settingsWindow = settingsWindow
+
+        statusBar = StatusBarController(onSettings: { [weak self] in
+            self?.settingsWindow?.show()
+        })
 
         let converterURL = Bundle.main.resourceURL!
             .appendingPathComponent("markitdown-bin")
@@ -32,18 +41,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notch.onFilesDropped = { [weak self] urls in
             self?.handleDrop(urls)
         }
+        notch.onSettingsRequested = { [weak self] in
+            self?.settingsWindow?.show()
+        }
         notch.start()
         self.notch = notch
     }
 
     private func handleDrop(_ urls: [URL]) {
-        guard let notch, let pipeline, !isConverting else { return }
+        guard let notch, let pipeline, let settings, !isConverting else { return }
         isConverting = true
         notch.beginConversion()
 
+        let pipelineSettings = settings.pipelineSettings
         Task { @MainActor in
             defer { isConverting = false }
-            let result = await pipeline.process(urls: urls, settings: PipelineSettings())
+            let result = await pipeline.process(urls: urls, settings: pipelineSettings)
 
             if let payload = result.clipboardPayload {
                 let pasteboard = NSPasteboard.general

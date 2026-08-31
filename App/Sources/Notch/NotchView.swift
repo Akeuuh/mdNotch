@@ -40,6 +40,19 @@ struct NotchView: View {
                     }
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
+            case .settingsHover:
+                VStack {
+                    ZStack {
+                        UnevenRoundedRectangle(bottomLeadingRadius: 12, bottomTrailingRadius: 12)
+                            .fill(Color.black.opacity(0.94))
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Color.white.opacity(0.85))
+                    }
+                    .frame(width: 120, height: 38)
+                    Spacer(minLength: 0)
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
             case .failure(let message):
                 zone(glowing: false) {
                     VStack(spacing: 4) {

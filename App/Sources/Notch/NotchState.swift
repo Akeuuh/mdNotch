@@ -17,6 +17,8 @@ final class NotchState: ObservableObject {
         /// At least one file failed: red cross + short message(s).
         /// Collapses on click or after ~4 s.
         case failure(message: String)
+        /// Mouse hovers the notch area: compact bar with the settings gear.
+        case settingsHover
     }
 
     @Published var phase: Phase = .idle

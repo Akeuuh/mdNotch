@@ -31,6 +31,19 @@ enum NotchGeometry {
         )
     }
 
+    /// Region (screen coordinates) whose mouse hover reveals the settings
+    /// gear: the notch itself (or its top-center stand-in).
+    static func hoverRegion(on screen: NSScreen) -> NSRect {
+        let width = notchWidth(for: screen)
+        let height = max(screen.safeAreaInsets.top, 28)
+        return NSRect(
+            x: screen.frame.midX - width / 2,
+            y: screen.frame.maxY - height,
+            width: width,
+            height: height
+        )
+    }
+
     /// Region (screen coordinates) in which an approaching file drag makes
     /// the drop zone appear. Larger than the visible zone so the zone opens
     /// before the cursor reaches it.

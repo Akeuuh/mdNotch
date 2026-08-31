@@ -8,9 +8,11 @@ import SwiftUI
 final class NotchWindowController {
     let state = NotchState()
     var onFilesDropped: (([URL]) -> Void)?
+    var onSettingsRequested: (() -> Void)?
 
     private let panel: NSPanel
     private let dragMonitor = DragMonitor()
+    private let hoverMonitor = HoverMonitor()
     private var collapseTask: Task<Void, Never>?
 
     init() {
@@ -41,9 +43,16 @@ final class NotchWindowController {
             self?.handleDrop(urls)
         }
         dropView.onClicked = { [weak self] in
-            // Error feedback collapses on click.
-            if case .failure = self?.state.phase {
-                self?.collapse()
+            guard let self else { return }
+            switch self.state.phase {
+            case .failure:
+                // Error feedback collapses on click.
+                self.collapse()
+            case .settingsHover:
+                self.collapse()
+                self.onSettingsRequested?()
+            default:
+                break
             }
         }
 
@@ -62,6 +71,11 @@ final class NotchWindowController {
             self?.dragEnded()
         }
         dragMonitor.start()
+
+        hoverMonitor.onHoverChanged = { [weak self] inside, screen in
+            self?.hoverChanged(inside: inside, screen: screen)
+        }
+        hoverMonitor.start()
 
         if let screen = NSScreen.main {
             panel.setFrame(NotchGeometry.windowFrame(on: screen), display: false)
@@ -93,14 +107,27 @@ final class NotchWindowController {
         collapse()
     }
 
-    private func dragMoved(near: Bool, screen: NSScreen?) {
-        if near, let screen {
-            // Never interrupt an ongoing conversion or its feedback.
-            guard state.phase == .idle || isDropTarget else { return }
+    private func hoverChanged(inside: Bool, screen: NSScreen?) {
+        if inside, let screen {
+            // The gear only appears from rest.
+            guard state.phase == .idle else { return }
             panel.setFrame(NotchGeometry.windowFrame(on: screen), display: true)
             panel.ignoresMouseEvents = false
             panel.orderFrontRegardless()
-            if state.phase == .idle {
+            state.phase = .settingsHover
+        } else if state.phase == .settingsHover {
+            collapse()
+        }
+    }
+
+    private func dragMoved(near: Bool, screen: NSScreen?) {
+        if near, let screen {
+            // Never interrupt an ongoing conversion or its feedback.
+            guard state.phase == .idle || isDropTarget || state.phase == .settingsHover else { return }
+            panel.setFrame(NotchGeometry.windowFrame(on: screen), display: true)
+            panel.ignoresMouseEvents = false
+            panel.orderFrontRegardless()
+            if state.phase == .idle || state.phase == .settingsHover {
                 state.phase = .dropTarget(hovering: false)
             }
         } else if isDropTarget {
