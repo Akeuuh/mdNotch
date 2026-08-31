@@ -13,6 +13,9 @@ targets:
     platform: macOS
     sources:
       - App/Sources
+      # String Catalog (EN base + FR).
+      - path: App/Resources
+        buildPhase: resources
       # Frozen markitdown binary (built by scripts/freeze-markitdown/build.sh),
       # copied as a folder reference into Resources/markitdown-bin/.
       - path: scripts/freeze-markitdown/dist/markitdown-bin
@@ -23,6 +26,7 @@ targets:
     info:
       path: App/Info.plist
       properties:
+        CFBundleDevelopmentRegion: en
         CFBundleDisplayName: mdNotch
         CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "1"
