@@ -13,3 +13,7 @@ dist/
 
 # macOS
 .DS_Store
+
+# Icon generator build artifacts
+scripts/icon/gen_icon
+scripts/icon/*.iconset/

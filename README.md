@@ -31,6 +31,23 @@ cd Core && swift test
 cd Core && MDNOTCH_INTEGRATION=1 swift test --filter MdNotchIntegrationTests
 ```
 
+## App icon
+
+`App/Resources/AppIcon.icns` is generated, not hand-drawn — regenerate it
+after changing `scripts/icon/gen_icon.swift`:
+
+```bash
+cd scripts/icon
+swiftc -parse-as-library gen_icon.swift -o gen_icon
+./gen_icon /tmp/AppIcon.iconset
+iconutil -c icns /tmp/AppIcon.iconset -o ../../App/Resources/AppIcon.icns
+```
+
+Every size is rendered at its own resolution rather than resampled from the
+largest, so small sizes stay crisp. The arrow is drawn by hand on purpose:
+Apple's SF Symbols license allows them in an app's interface but not in app
+icons or logos.
+
 ## Release
 
 Signed, notarized DMG: see `scripts/release/README.md`.
