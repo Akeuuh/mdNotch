@@ -32,6 +32,11 @@ echo "==> Freezing with PyInstaller"
 rm -rf build dist
 pyinstaller --noconfirm markitdown-bin.spec
 
+echo "==> Collecting third-party licenses"
+# MIT/BSD/Apache all require the license text to travel with the binary, so
+# it ships inside the frozen bundle (and therefore inside the .app).
+python gen_licenses.py dist/markitdown-bin/THIRD-PARTY-LICENSES.txt
+
 echo "==> Smoke test: converting sample PDF (network disabled not enforced here;"
 echo "    markitdown offline converters make no network calls)"
 OUT="$(./dist/markitdown-bin/markitdown-bin sample/sample.pdf)"

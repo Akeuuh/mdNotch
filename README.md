@@ -34,3 +34,19 @@ cd Core && MDNOTCH_INTEGRATION=1 swift test --filter MdNotchIntegrationTests
 ## Release
 
 Signed, notarized DMG: see `scripts/release/README.md`.
+
+## Licensing
+
+mdNotch itself is MIT (see `LICENSE`).
+
+The app embeds a frozen build of [markitdown](https://github.com/microsoft/markitdown)
+(MIT) and its dependencies — 38 packages, all under permissive terms (MIT,
+BSD, Apache 2.0, PSF, MPL 2.0 for certifi). No GPL or LGPL code is
+redistributed: PyInstaller is a build tool, and only its bootloader ships,
+under the Bootloader Exception that explicitly permits embedding in an
+application under any license.
+
+`scripts/freeze-markitdown/gen_licenses.py` collects every bundled package's
+license into `THIRD-PARTY-LICENSES.txt`, which the freeze build writes into
+the frozen bundle so it ships inside the `.app`. The release script refuses
+to build without it.

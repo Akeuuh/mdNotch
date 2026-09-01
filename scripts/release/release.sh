@@ -36,6 +36,12 @@ if [[ ! -x "$FROZEN/markitdown-bin" ]]; then
     echo "error: frozen binary missing — run scripts/freeze-markitdown/build.sh first" >&2
     exit 1
 fi
+# Redistributing the bundled packages without their licenses would breach
+# the MIT/BSD/Apache terms they are shipped under.
+if [[ ! -f "$FROZEN/THIRD-PARTY-LICENSES.txt" ]]; then
+    echo "error: THIRD-PARTY-LICENSES.txt missing — re-run scripts/freeze-markitdown/build.sh" >&2
+    exit 1
+fi
 
 ENTITLEMENTS=scripts/release/entitlements.plist
 DIST=dist/release
