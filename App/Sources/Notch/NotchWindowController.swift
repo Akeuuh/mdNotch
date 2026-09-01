@@ -76,8 +76,8 @@ final class NotchWindowController {
         }
         dragMonitor.start()
 
-        hoverMonitor.onHoverChanged = { [weak self] inside, screen in
-            self?.hoverChanged(inside: inside, screen: screen)
+        hoverMonitor.onMouseMoved = { [weak self] location, screen in
+            self?.mouseMoved(to: location, screen: screen)
         }
         hoverMonitor.start()
 
@@ -111,14 +111,28 @@ final class NotchWindowController {
         collapse()
     }
 
-    private func hoverChanged(inside: Bool, screen: NSScreen?) {
-        if inside, let screen {
-            // The gear only appears from rest.
-            guard state.phase == .idle else { return }
-            reveal(on: screen)
+    private func mouseMoved(to location: NSPoint, screen: NSScreen?) {
+        guard let screen else {
+            if state.phase == .settingsHover { collapse() }
+            return
+        }
+
+        switch state.phase {
+        case .idle:
+            guard NSMouseInRect(location, NotchGeometry.hoverRegion(on: screen), false) else { return }
+            // The pill hangs *below* the notch: anything drawn inside the
+            // notch itself would be invisible.
+            state.topInset = 0
+            reveal(NotchGeometry.gearFrame(on: screen))
             state.phase = .settingsHover
-        } else if state.phase == .settingsHover {
-            collapse()
+        case .settingsHover:
+            // Wider region while out, so the pointer can travel onto the
+            // pill and click it.
+            if !NSMouseInRect(location, NotchGeometry.gearKeepRegion(on: screen), false) {
+                collapse()
+            }
+        default:
+            break
         }
     }
 
@@ -126,7 +140,8 @@ final class NotchWindowController {
         if near, let screen {
             // Never interrupt an ongoing conversion or its feedback.
             guard state.phase == .idle || isDropTarget || state.phase == .settingsHover else { return }
-            reveal(on: screen)
+            state.topInset = NotchGeometry.topInset(for: screen)
+            reveal(NotchGeometry.windowFrame(on: screen))
             if state.phase == .idle || state.phase == .settingsHover {
                 state.phase = .dropTarget(hovering: false)
             }
@@ -135,9 +150,9 @@ final class NotchWindowController {
         }
     }
 
-    /// Positions the panel on `screen` and makes it interactive.
-    private func reveal(on screen: NSScreen) {
-        panel.setFrame(NotchGeometry.windowFrame(on: screen), display: true)
+    /// Positions the panel and makes it interactive.
+    private func reveal(_ frame: NSRect) {
+        panel.setFrame(frame, display: true)
         panel.ignoresMouseEvents = false
         panel.orderFrontRegardless()
     }

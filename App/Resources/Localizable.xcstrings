@@ -2,6 +2,7 @@
   "sourceLanguage" : "en",
   "strings" : {
     "Choose…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -12,6 +13,7 @@
       }
     },
     "Conversion failed: %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -22,6 +24,7 @@
       }
     },
     "Conversion timed out: %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -62,6 +65,7 @@
       }
     },
     "Launch at login" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -72,6 +76,7 @@
       }
     },
     "mdNotch Settings" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -92,6 +97,7 @@
       }
     },
     "No folder selected" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -102,6 +108,7 @@
       }
     },
     "Quit mdNotch" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -112,6 +119,7 @@
       }
     },
     "Save converted files" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -121,7 +129,18 @@
         }
       }
     },
+    "Settings" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réglages"
+          }
+        }
+      }
+    },
     "Settings…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -132,6 +151,7 @@
       }
     },
     "Unsupported format: %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {

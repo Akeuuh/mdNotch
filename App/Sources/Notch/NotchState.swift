@@ -22,4 +22,8 @@ final class NotchState: ObservableObject {
     }
 
     @Published var phase: Phase = .idle
+
+    /// Height of the notch (or menu bar) the zone hangs from. Content is
+    /// pushed below it: anything drawn inside the notch is invisible.
+    @Published var topInset: CGFloat = 0
 }

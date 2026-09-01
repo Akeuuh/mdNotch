@@ -4,23 +4,33 @@ import SwiftUI
 struct NotchView: View {
     @ObservedObject var state: NotchState
 
+    private var zoneShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(bottomLeadingRadius: 22, bottomTrailingRadius: 22)
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             switch state.phase {
             case .idle:
                 Color.clear
+
+            case .settingsHover:
+                gearPill
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+
             case .dropTarget(let hovering):
-                zone(glowing: false) {
-                    VStack(spacing: 4) {
-                        Image(systemName: "arrow.down.doc")
-                            .font(.system(size: 22, weight: .medium))
+                zone(hovering: hovering) {
+                    VStack(spacing: 7) {
+                        Image(systemName: "arrow.down.doc.fill")
+                            .font(.system(size: 20, weight: .semibold))
+                            .symbolRenderingMode(.hierarchical)
                         Text("Drop to convert")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(size: 11.5, weight: .medium, design: .rounded))
                     }
-                    .foregroundStyle(hovering ? Color.white : Color.white.opacity(0.75))
+                    .foregroundStyle(.white.opacity(hovering ? 1 : 0.72))
                 }
-                .scaleEffect(hovering ? 1.03 : 1.0, anchor: .top)
                 .transition(.move(edge: .top).combined(with: .opacity))
+
             case .converting:
                 zone(glowing: true) {
                     ProgressView()
@@ -28,85 +38,139 @@ struct NotchView: View {
                         .tint(.white)
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
+
             case .success:
-                zone(glowing: false) {
-                    VStack(spacing: 4) {
+                zone {
+                    VStack(spacing: 7) {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 22, weight: .medium))
-                            .foregroundStyle(.green)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.white, Color.green)
                         Text("Copied")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(size: 11.5, weight: .medium, design: .rounded))
                             .foregroundStyle(.white)
                     }
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
-            case .settingsHover:
-                VStack {
-                    ZStack {
-                        UnevenRoundedRectangle(bottomLeadingRadius: 12, bottomTrailingRadius: 12)
-                            .fill(Color.black.opacity(0.94))
-                        Image(systemName: "gearshape.fill")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(Color.white.opacity(0.85))
-                    }
-                    .frame(width: 120, height: 38)
-                    Spacer(minLength: 0)
-                }
-                .transition(.move(edge: .top).combined(with: .opacity))
+
             case .failure(let message):
-                zone(glowing: false) {
-                    VStack(spacing: 4) {
+                zone {
+                    VStack(spacing: 7) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 22, weight: .medium))
-                            .foregroundStyle(.red)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.white, Color.red)
                         Text(message)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.white)
+                            .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.9))
                             .lineLimit(2)
                             .multilineTextAlignment(.center)
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, 14)
                     }
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: state.phase)
+        .animation(.spring(response: 0.34, dampingFraction: 0.82), value: state.phase)
     }
 
-    /// Black rounded-bottom zone shared by every visible phase.
-    /// `glowing` adds the pulsing glow used while converting.
-    private func zone<Content: View>(glowing: Bool, @ViewBuilder content: () -> Content) -> some View {
+    /// The black slab hanging from the notch. `content` is centered in the
+    /// part below the notch; the rest sits behind it and is never seen.
+    private func zone<Content: View>(
+        hovering: Bool = false,
+        glowing: Bool = false,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
         ZStack {
-            UnevenRoundedRectangle(
-                bottomLeadingRadius: 18,
-                bottomTrailingRadius: 18
-            )
-            .fill(Color.black.opacity(0.94))
-            .modifier(GlowEffect(active: glowing))
+            // Behind the slab, so it reads as light spilling out from
+            // under the notch rather than a border drawn on top.
+            if glowing {
+                IntelligenceGlow(shape: zoneShape)
+            }
+
+            zoneShape
+                .fill(.black)
+                .overlay(
+                    zoneShape.strokeBorder(.white.opacity(0.09), lineWidth: 0.5)
+                )
+                // The drop shadow would muddy the glow it sits on.
+                .shadow(color: glowing ? .clear : .black.opacity(0.35), radius: 14, y: 8)
 
             content()
-                .padding(.top, 24)
+                .padding(.top, state.topInset)
+        }
+        .scaleEffect(hovering ? 1.015 : 1, anchor: .top)
+        .padding(.horizontal, NotchGeometry.glowPadding)
+        .padding(.bottom, NotchGeometry.glowPadding)
+    }
+
+    /// Settings affordance: a small slab hanging just under the notch.
+    private var gearPill: some View {
+        ZStack {
+            UnevenRoundedRectangle(bottomLeadingRadius: 16, bottomTrailingRadius: 16)
+                .fill(.black.opacity(0.92))
+                .overlay(
+                    UnevenRoundedRectangle(bottomLeadingRadius: 16, bottomTrailingRadius: 16)
+                        .strokeBorder(.white.opacity(0.1), lineWidth: 0.5)
+                )
+                .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
+
+            HStack(spacing: 6) {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("Settings")
+                    .font(.system(size: 11.5, weight: .medium, design: .rounded))
+            }
+            .foregroundStyle(.white.opacity(0.85))
         }
     }
 }
 
-/// Pulsing glow around the zone while a conversion runs.
-private struct GlowEffect: ViewModifier {
-    let active: Bool
-    @State private var pulse = false
+/// Apple-Intelligence-flavoured rim light: a slowly rotating angular
+/// gradient, once as a soft bloom and once as a tight rim, breathing gently.
+private struct IntelligenceGlow: View {
+    let shape: UnevenRoundedRectangle
 
-    func body(content: Content) -> some View {
-        content
-            .shadow(
-                color: active ? Color.cyan.opacity(pulse ? 0.9 : 0.4) : .clear,
-                radius: active ? (pulse ? 16 : 8) : 0
-            )
-            .onAppear {
-                guard active else { return }
-                withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-                    pulse = true
-                }
+    @State private var angle: Double = 0
+    @State private var breathing = false
+
+    private static let spectrum: [Color] = [
+        Color(red: 0.35, green: 0.55, blue: 1.00),
+        Color(red: 0.68, green: 0.42, blue: 1.00),
+        Color(red: 1.00, green: 0.44, blue: 0.74),
+        Color(red: 1.00, green: 0.66, blue: 0.38),
+        Color(red: 0.35, green: 0.55, blue: 1.00),
+    ]
+
+    var body: some View {
+        let gradient = AngularGradient(
+            colors: Self.spectrum,
+            center: .center,
+            angle: .degrees(angle)
+        )
+
+        ZStack {
+            // Wide soft spill.
+            shape
+                .stroke(gradient, lineWidth: 26)
+                .blur(radius: 30)
+                .opacity(breathing ? 0.55 : 0.3)
+            // Bloom.
+            shape
+                .stroke(gradient, lineWidth: 14)
+                .blur(radius: 14)
+                .opacity(breathing ? 1 : 0.7)
+            // Tight rim.
+            shape
+                .stroke(gradient, lineWidth: 3)
+                .blur(radius: 2)
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 5).repeatForever(autoreverses: false)) {
+                angle = 360
             }
+            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+                breathing = true
+            }
+        }
     }
 }
