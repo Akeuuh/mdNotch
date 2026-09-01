@@ -91,6 +91,9 @@ final class NotchWindowController {
     func beginConversion() {
         collapseTask?.cancel()
         state.phase = .converting
+        // Nothing to click while it runs, and the window is wide enough to
+        // cover part of the menu bar — let events through.
+        panel.ignoresMouseEvents = true
     }
 
     /// Call when the pipeline finished. Success: green check + "Copied",
@@ -104,6 +107,8 @@ final class NotchWindowController {
     /// collapse on click or after ~4 s.
     func showFailure(message: String) {
         state.phase = .failure(message: message)
+        // Dismissable by clicking it.
+        panel.ignoresMouseEvents = false
         scheduleCollapse(after: 4)
     }
 

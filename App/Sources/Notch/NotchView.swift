@@ -149,15 +149,15 @@ private struct IntelligenceGlow: View {
         )
 
         ZStack {
-            // Wide soft spill.
+            // Wide soft spill. Its reach sets NotchGeometry.glowPadding.
             shape
-                .stroke(gradient, lineWidth: 26)
-                .blur(radius: 30)
+                .stroke(gradient, lineWidth: 20)
+                .blur(radius: 26)
                 .opacity(breathing ? 0.55 : 0.3)
             // Bloom.
             shape
-                .stroke(gradient, lineWidth: 14)
-                .blur(radius: 14)
+                .stroke(gradient, lineWidth: 12)
+                .blur(radius: 12)
                 .opacity(breathing ? 1 : 0.7)
             // Tight rim.
             shape

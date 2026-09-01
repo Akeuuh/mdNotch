@@ -8,8 +8,10 @@ enum NotchGeometry {
     /// Visible height of the drop zone *below* the notch.
     static let zoneBodyHeight: CGFloat = 84
     /// Transparent margin kept around the zone so the glow can bleed out
-    /// without being clipped by the window.
-    static let glowPadding: CGFloat = 30
+    /// without being clipped by the window. Must exceed the widest glow
+    /// pass's reach (half its stroke plus roughly twice its blur radius),
+    /// otherwise the halo ends on a hard window edge.
+    static let glowPadding: CGFloat = 76
     /// The settings pill that hangs under the notch on hover.
     static let gearSize = CGSize(width: 128, height: 34)
 
