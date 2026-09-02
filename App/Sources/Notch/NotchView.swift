@@ -5,18 +5,36 @@ struct NotchView: View {
     @ObservedObject var state: NotchState
 
     private var zoneShape: UnevenRoundedRectangle {
-        UnevenRoundedRectangle(bottomLeadingRadius: 22, bottomTrailingRadius: 22)
+        UnevenRoundedRectangle(
+            cornerRadii: NotchGeometry.cornerRadii(for: state.anchor, radius: NotchGeometry.zoneCornerRadius)
+        )
+    }
+
+    private var gearShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            cornerRadii: NotchGeometry.cornerRadii(for: state.anchor, radius: NotchGeometry.gearCornerRadius)
+        )
+    }
+
+    /// Edge every phase animates in from: the one the zone is anchored to.
+    private var entryEdge: Edge {
+        NotchGeometry.entryEdge(for: state.anchor)
+    }
+
+    /// Sign of the drop shadow: it falls away from the anchored edge.
+    private var shadowDrop: CGFloat {
+        state.anchor.isTop ? 1 : -1
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
+        ZStack(alignment: NotchGeometry.slabAlignment(for: state.anchor)) {
             switch state.phase {
             case .idle:
                 Color.clear
 
             case .settingsHover:
                 gearPill
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(.opacity.combined(with: .move(edge: entryEdge)))
 
             case .dropTarget(let hovering):
                 zone(hovering: hovering) {
@@ -29,7 +47,7 @@ struct NotchView: View {
                     }
                     .foregroundStyle(.white.opacity(hovering ? 1 : 0.72))
                 }
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .transition(.move(edge: entryEdge).combined(with: .opacity))
 
             case .converting:
                 zone(glowing: true) {
@@ -37,7 +55,7 @@ struct NotchView: View {
                         .controlSize(.small)
                         .tint(.white)
                 }
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .transition(.move(edge: entryEdge).combined(with: .opacity))
 
             case .success:
                 zone {
@@ -50,7 +68,7 @@ struct NotchView: View {
                             .foregroundStyle(.white)
                     }
                 }
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .transition(.move(edge: entryEdge).combined(with: .opacity))
 
             case .failure(let message):
                 zone {
@@ -66,15 +84,18 @@ struct NotchView: View {
                             .padding(.horizontal, 14)
                     }
                 }
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .transition(.move(edge: entryEdge).combined(with: .opacity))
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: NotchGeometry.slabAlignment(for: state.anchor))
         .animation(.spring(response: 0.34, dampingFraction: 0.82), value: state.phase)
+        // Geometry here is computed in screen coordinates, so the leading
+        // side must stay the left one whatever the system language.
+        .environment(\.layoutDirection, .leftToRight)
     }
 
-    /// The black slab hanging from the notch. `content` is centered in the
-    /// part below the notch; the rest sits behind it and is never seen.
+    /// The black slab hanging off the anchored edge. `content` is centered in
+    /// the visible part; anything behind the notch is never seen.
     private func zone<Content: View>(
         hovering: Bool = false,
         glowing: Bool = false,
@@ -93,26 +114,24 @@ struct NotchView: View {
                     zoneShape.strokeBorder(.white.opacity(0.09), lineWidth: 0.5)
                 )
                 // The drop shadow would muddy the glow it sits on.
-                .shadow(color: glowing ? .clear : .black.opacity(0.35), radius: 14, y: 8)
+                .shadow(color: glowing ? .clear : .black.opacity(0.35), radius: 14, y: shadowDrop * 8)
 
             content()
                 .padding(.top, state.topInset)
         }
-        .scaleEffect(hovering ? 1.015 : 1, anchor: .top)
-        .padding(.horizontal, NotchGeometry.glowPadding)
-        .padding(.bottom, NotchGeometry.glowPadding)
+        .scaleEffect(hovering ? 1.015 : 1, anchor: NotchGeometry.scaleAnchor(for: state.anchor))
+        .padding(NotchGeometry.slabPadding(for: state.anchor))
     }
 
-    /// Settings affordance: a small slab hanging just under the notch.
+    /// Settings affordance: a small slab hanging off the anchored edge.
     private var gearPill: some View {
         ZStack {
-            UnevenRoundedRectangle(bottomLeadingRadius: 16, bottomTrailingRadius: 16)
+            gearShape
                 .fill(.black.opacity(0.92))
                 .overlay(
-                    UnevenRoundedRectangle(bottomLeadingRadius: 16, bottomTrailingRadius: 16)
-                        .strokeBorder(.white.opacity(0.1), lineWidth: 0.5)
+                    gearShape.strokeBorder(.white.opacity(0.1), lineWidth: 0.5)
                 )
-                .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
+                .shadow(color: .black.opacity(0.3), radius: 10, y: shadowDrop * 5)
 
             HStack(spacing: 6) {
                 Image(systemName: "gearshape.fill")

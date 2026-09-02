@@ -37,7 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .appendingPathComponent("markitdown-bin")
         pipeline = ConversionPipeline(converter: SubprocessMarkdownConverter(binaryURL: converterURL))
 
-        let notch = NotchWindowController()
+        let notch = NotchWindowController(settings: settings)
         notch.onFilesDropped = { [weak self] urls in
             self?.handleDrop(urls)
         }
