@@ -83,6 +83,9 @@ Deux points d'entrée :
 ### Contenu des réglages
 
 - Destination des `.md` : à côté du source / dossier fixe (+ sélecteur).
+- Zone de dépôt : encoche (défaut) ou l'un des quatre coins de l'écran, pour
+  les setups où une autre app occupe déjà l'encoche. La zone reste collée aux
+  bords qu'elle touche ; seuls ses coins tournés vers l'intérieur sont arrondis.
 - Launch at login (on/off, défaut on).
 
 ## 6. Localisation
