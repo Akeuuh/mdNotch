@@ -122,10 +122,10 @@ final class NotchWindowController {
         panel.ignoresMouseEvents = true
     }
 
-    /// Call when the pipeline finished. Success: green check + "Copied",
+    /// Call when the pipeline finished. Success: green check + `message`,
     /// auto-collapse after ~2 s.
-    func showSuccess() {
-        state.phase = .success
+    func showSuccess(message: String) {
+        state.phase = .success(message: message)
         scheduleCollapse(after: 2)
     }
 

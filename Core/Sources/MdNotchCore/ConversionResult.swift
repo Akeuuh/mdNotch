@@ -22,6 +22,17 @@ public struct SourceConversionResult: Sendable {
         return false
     }
 
+    /// The markdown came back exactly as it went in — nothing was converted.
+    /// Only reachable for pasted plain text, which is already its own
+    /// markdown. Worth surfacing: "copied" and "converted" are not the same
+    /// claim, and a user who sees the first while expecting the second has no
+    /// way to tell them apart.
+    public var isUnchanged: Bool {
+        guard case .pasted(let pasted) = source,
+              case .success(let markdown, _) = outcome
+        else { return false }
+        return markdown == pasted.text
+    }
 }
 
 /// Typed conversion failures, one per source. `fileName` names the source as
@@ -49,4 +60,10 @@ public struct PipelineResult: Sendable {
 
     public var failures: [SourceConversionResult] { files.filter { !$0.isSuccess } }
     public var successes: [SourceConversionResult] { files.filter(\.isSuccess) }
+
+    /// Everything that succeeded came back untouched: the run copied text
+    /// without converting anything.
+    public var changedNothing: Bool {
+        !successes.isEmpty && successes.allSatisfy(\.isUnchanged)
+    }
 }

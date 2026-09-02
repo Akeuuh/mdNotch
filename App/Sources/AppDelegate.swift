@@ -103,7 +103,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             if result.failures.isEmpty {
-                notch.showSuccess()
+                // "Copied" would claim a conversion that did not happen —
+                // the only way for the user to tell the two apart.
+                notch.showSuccess(
+                    message: result.changedNothing
+                        ? String(localized: "Copied as-is")
+                        : String(localized: "Copied")
+                )
             } else {
                 notch.showFailure(message: Self.failureMessage(for: result))
             }

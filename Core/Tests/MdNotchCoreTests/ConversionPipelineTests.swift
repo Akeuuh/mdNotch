@@ -341,6 +341,7 @@ final class ConversionPipelineTests: XCTestCase {
 
         XCTAssertEqual(result.clipboardPayload, "# Title")
         XCTAssertEqual(converter.invocations.count, 1, "an HTML document must reach the converter")
+        XCTAssertFalse(result.changedNothing)
     }
 
     func testHTMLDocumentBehindALeadingCommentIsStillRecognised() {
@@ -366,6 +367,39 @@ final class ConversionPipelineTests: XCTestCase {
                 "must stay plain: \(text.prefix(30))"
             )
         }
+    }
+
+    func testUnchangedPasteIsReportedAsSuch() async throws {
+        let converter = FakeConverter(markdown: "# never used")
+        let pipeline = ConversionPipeline(converter: converter)
+
+        let result = await pipeline.process(
+            sources: [.pasted(.fromPlainText("already **markdown**"))],
+            settings: PipelineSettings()
+        )
+
+        XCTAssertTrue(result.changedNothing, "plain text copied back untouched is not a conversion")
+        XCTAssertTrue(converter.invocations.isEmpty)
+    }
+
+    func testConvertedPasteIsNotReportedAsUnchanged() async throws {
+        let pipeline = ConversionPipeline(converter: FakeConverter(markdown: "# Pasted"))
+
+        let result = await pipeline.process(
+            sources: [.pasted(PastedText(text: "<h1>Pasted</h1>", flavor: .html))],
+            settings: PipelineSettings()
+        )
+
+        XCTAssertFalse(result.changedNothing)
+    }
+
+    func testFileConversionIsNeverReportedAsUnchanged() async throws {
+        let source = try makeSourceFile(named: "report.pdf", contents: "# same")
+        let pipeline = ConversionPipeline(converter: FakeConverter(markdown: "# same"))
+
+        let result = await pipeline.process(urls: [source], settings: PipelineSettings())
+
+        XCTAssertFalse(result.changedNothing, "a file always went through the converter")
     }
 
     func testPastedConversionExceedingTimeoutIsInterrupted() async throws {

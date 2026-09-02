@@ -57,13 +57,13 @@ struct NotchView: View {
                 }
                 .transition(.move(edge: entryEdge).combined(with: .opacity))
 
-            case .success:
+            case .success(let message):
                 zone {
                     VStack(spacing: 7) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(.white, Color.green)
-                        Text("Copied")
+                        Text(message)
                             .font(.system(size: 11.5, weight: .medium, design: .rounded))
                             .foregroundStyle(.white)
                     }

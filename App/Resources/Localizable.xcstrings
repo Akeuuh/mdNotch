@@ -310,6 +310,16 @@
           }
         }
       }
+    },
+    "Copied as-is" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copié tel quel"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

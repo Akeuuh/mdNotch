@@ -170,6 +170,7 @@ final class RealBinaryConversionTests: XCTestCase {
         guard case .success(let markdown, _) = result.files[0].outcome else {
             return XCTFail("html source: expected success, got \(result.files[0].outcome)")
         }
+        XCTAssertFalse(result.changedNothing, "the markup must not come back untouched")
         XCTAssertFalse(markdown.contains("<h1>"), "no tags may survive in the markdown")
         XCTAssertTrue(markdown.contains("# \(Self.marker)"))
         XCTAssertTrue(markdown.contains("**bold**"))
