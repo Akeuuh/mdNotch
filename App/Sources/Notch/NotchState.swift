@@ -23,7 +23,12 @@ final class NotchState: ObservableObject {
 
     @Published var phase: Phase = .idle
 
-    /// Height of the notch (or menu bar) the zone hangs from. Content is
-    /// pushed below it: anything drawn inside the notch is invisible.
+    /// Screen edge the zone hangs from. Drives its shape, its padding and the
+    /// direction it slides in from.
+    @Published var anchor: DropZoneAnchor = .notch
+
+    /// Height of the notch the zone hangs from. Content is pushed below it:
+    /// anything drawn inside the notch is invisible. Zero for corner anchors,
+    /// which hide nothing.
     @Published var topInset: CGFloat = 0
 }

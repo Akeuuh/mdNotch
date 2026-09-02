@@ -27,6 +27,18 @@ struct SettingsView: View {
             }
 
             Section {
+                Picker(String(localized: "Drop zone"), selection: $settings.dropZoneAnchor) {
+                    ForEach(DropZoneAnchor.allCases) { anchor in
+                        Text(anchor.localizedName).tag(anchor)
+                    }
+                }
+            } footer: {
+                Text("Pick a corner if another app already uses the notch.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 Toggle(String(localized: "Launch at login"), isOn: $settings.launchAtLogin)
             }
         }

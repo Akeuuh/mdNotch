@@ -34,12 +34,42 @@
         }
       }
     },
+    "Bottom-left corner" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coin inférieur gauche"
+          }
+        }
+      }
+    },
+    "Bottom-right corner" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coin inférieur droit"
+          }
+        }
+      }
+    },
     "Copied" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Copié"
+          }
+        }
+      }
+    },
+    "Drop zone" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zone de dépôt"
           }
         }
       }
@@ -96,6 +126,16 @@
         }
       }
     },
+    "Notch" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Encoche"
+          }
+        }
+      }
+    },
     "No folder selected" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -103,6 +143,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aucun dossier sélectionné"
+          }
+        }
+      }
+    },
+    "Pick a corner if another app already uses the notch." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez un coin si une autre app occupe déjà l’encoche."
           }
         }
       }
@@ -146,6 +196,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Réglages…"
+          }
+        }
+      }
+    },
+    "Top-left corner" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coin supérieur gauche"
+          }
+        }
+      }
+    },
+    "Top-right corner" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coin supérieur droit"
           }
         }
       }

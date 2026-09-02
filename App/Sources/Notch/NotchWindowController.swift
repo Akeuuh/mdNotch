@@ -1,21 +1,28 @@
 import AppKit
+import Combine
 import SwiftUI
 
-/// Borderless always-on-top panel anchored under the notch (or top-center on
-/// screens without one). Invisible at rest; extends when a file drag comes
-/// near; accepts drops and hands the URLs to `onFilesDropped`.
+/// Borderless always-on-top panel anchored under the notch (or in a screen
+/// corner, per `AppSettings.dropZoneAnchor`). Invisible at rest; extends when
+/// a file drag comes near; accepts drops and hands the URLs to
+/// `onFilesDropped`.
 @MainActor
 final class NotchWindowController {
     let state = NotchState()
     var onFilesDropped: (([URL]) -> Void)?
     var onSettingsRequested: (() -> Void)?
 
+    private let settings: AppSettings
     private let panel: NSPanel
     private let dragMonitor = DragMonitor()
     private let hoverMonitor = HoverMonitor()
     private var collapseTask: Task<Void, Never>?
+    private var cancellables: Set<AnyCancellable> = []
 
-    init() {
+    private var anchor: DropZoneAnchor { settings.dropZoneAnchor }
+
+    init(settings: AppSettings) {
+        self.settings = settings
         panel = NotchPanel(
             contentRect: .zero,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -65,9 +72,12 @@ final class NotchWindowController {
         dropView.addSubview(hosting)
         panel.contentView = dropView
         hosting.frame = dropView.bounds
+
+        state.anchor = settings.dropZoneAnchor
     }
 
     func start() {
+        dragMonitor.anchor = anchor
         dragMonitor.onUpdate = { [weak self] near, screen in
             self?.dragMoved(near: near, screen: screen)
         }
@@ -76,13 +86,23 @@ final class NotchWindowController {
         }
         dragMonitor.start()
 
+        // Moving the zone while it is out would leave the panel behind.
+        settings.$dropZoneAnchor
+            .dropFirst()
+            .sink { [weak self] anchor in
+                MainActor.assumeIsolated {
+                    self?.anchorChanged(to: anchor)
+                }
+            }
+            .store(in: &cancellables)
+
         hoverMonitor.onMouseMoved = { [weak self] location, screen in
             self?.mouseMoved(to: location, screen: screen)
         }
         hoverMonitor.start()
 
         if let screen = NSScreen.main {
-            panel.setFrame(NotchGeometry.windowFrame(on: screen), display: false)
+            panel.setFrame(NotchGeometry.windowFrame(for: anchor, on: screen), display: false)
         }
         panel.orderFrontRegardless()
     }
@@ -124,16 +144,17 @@ final class NotchWindowController {
 
         switch state.phase {
         case .idle:
-            guard NSMouseInRect(location, NotchGeometry.hoverRegion(on: screen), false) else { return }
-            // The pill hangs *below* the notch: anything drawn inside the
-            // notch itself would be invisible.
+            guard NSMouseInRect(location, NotchGeometry.hoverRegion(for: anchor, on: screen), false) else { return }
+            // The pill hangs clear of the notch (or of the menu bar): anything
+            // drawn inside the notch itself would be invisible.
+            state.anchor = anchor
             state.topInset = 0
-            reveal(NotchGeometry.gearFrame(on: screen))
+            reveal(NotchGeometry.gearFrame(for: anchor, on: screen))
             state.phase = .settingsHover
         case .settingsHover:
             // Wider region while out, so the pointer can travel onto the
             // pill and click it.
-            if !NSMouseInRect(location, NotchGeometry.gearKeepRegion(on: screen), false) {
+            if !NSMouseInRect(location, NotchGeometry.gearKeepRegion(for: anchor, on: screen), false) {
                 collapse()
             }
         default:
@@ -145,13 +166,25 @@ final class NotchWindowController {
         if near, let screen {
             // Never interrupt an ongoing conversion or its feedback.
             guard state.phase == .idle || isDropTarget || state.phase == .settingsHover else { return }
-            state.topInset = NotchGeometry.topInset(for: screen)
-            reveal(NotchGeometry.windowFrame(on: screen))
+            state.anchor = anchor
+            state.topInset = NotchGeometry.contentTopInset(for: anchor, on: screen)
+            reveal(NotchGeometry.windowFrame(for: anchor, on: screen))
             if state.phase == .idle || state.phase == .settingsHover {
                 state.phase = .dropTarget(hovering: false)
             }
         } else if isDropTarget {
             collapse()
+        }
+    }
+
+    /// The zone moved: pull it back in and park the panel on the new anchor,
+    /// so the next reveal doesn't animate in from the old position.
+    private func anchorChanged(to anchor: DropZoneAnchor) {
+        dragMonitor.anchor = anchor
+        collapse()
+        state.anchor = anchor
+        if let screen = NSScreen.main {
+            panel.setFrame(NotchGeometry.windowFrame(for: anchor, on: screen), display: false)
         }
     }
 

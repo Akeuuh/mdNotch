@@ -1,10 +1,13 @@
 import AppKit
 
 /// Watches global mouse drags and reports when a *file* drag is near the
-/// top-center trigger region of a screen. Uses the drag pasteboard's change
-/// count to distinguish file drags from text selections etc.
+/// trigger region of a screen. Uses the drag pasteboard's change count to
+/// distinguish file drags from text selections etc.
 @MainActor
 final class DragMonitor {
+    /// Where the drop zone currently lives; sets the trigger region.
+    var anchor: DropZoneAnchor = .notch
+
     /// Called on every relevant drag move: is the drag inside the trigger
     /// region, and on which screen.
     var onUpdate: ((_ nearTarget: Bool, _ screen: NSScreen?) -> Void)?
@@ -60,7 +63,7 @@ final class DragMonitor {
             onUpdate?(false, nil)
             return
         }
-        let near = NSMouseInRect(mouse, NotchGeometry.triggerRegion(on: screen), false)
+        let near = NSMouseInRect(mouse, NotchGeometry.triggerRegion(for: anchor, on: screen), false)
         onUpdate?(near, screen)
     }
 
