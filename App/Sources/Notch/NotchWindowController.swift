@@ -1,15 +1,17 @@
 import AppKit
 import Combine
+import MdNotchCore
 import SwiftUI
 
 /// Borderless always-on-top panel anchored under the notch (or in a screen
 /// corner, per `AppSettings.dropZoneAnchor`). Invisible at rest; extends when
-/// a file drag comes near; accepts drops and hands the URLs to
-/// `onFilesDropped`.
+/// a convertible drag comes near; accepts drops and hands files to
+/// `onFilesDropped`, dragged selections to `onTextDropped`.
 @MainActor
 final class NotchWindowController {
     let state = NotchState()
     var onFilesDropped: (([URL]) -> Void)?
+    var onTextDropped: ((PastedText) -> Void)?
     var onSettingsRequested: (() -> Void)?
 
     private let settings: AppSettings
@@ -47,7 +49,10 @@ final class NotchWindowController {
             self.state.phase = .dropTarget(hovering: false)
         }
         dropView.onFilesDropped = { [weak self] urls in
-            self?.handleDrop(urls)
+            self?.onFilesDropped?(urls)
+        }
+        dropView.onTextDropped = { [weak self] pasted in
+            self?.onTextDropped?(pasted)
         }
         dropView.canAcceptDrop = { [weak self] in
             guard let self else { return false }
@@ -208,9 +213,6 @@ final class NotchWindowController {
         return false
     }
 
-    private func handleDrop(_ urls: [URL]) {
-        onFilesDropped?(urls)
-    }
 
     private func scheduleCollapse(after seconds: Double) {
         collapseTask?.cancel()

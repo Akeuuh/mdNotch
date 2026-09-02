@@ -1,8 +1,9 @@
 import AppKit
 
-/// Watches global mouse drags and reports when a *file* drag is near the
-/// trigger region of a screen. Uses the drag pasteboard's change count to
-/// distinguish file drags from text selections etc.
+/// Watches global mouse drags and reports when a *convertible* drag is near
+/// the trigger region of a screen. Uses the drag pasteboard's change count to
+/// spot the start of each drag session, then its types to decide whether the
+/// zone should come out at all.
 @MainActor
 final class DragMonitor {
     /// Where the drop zone currently lives; sets the trigger region.
@@ -11,15 +12,20 @@ final class DragMonitor {
     /// Called on every relevant drag move: is the drag inside the trigger
     /// region, and on which screen.
     var onUpdate: ((_ nearTarget: Bool, _ screen: NSScreen?) -> Void)?
-    /// Called when the mouse button is released during a file drag
+    /// Called when the mouse button is released during a convertible drag
     /// (wherever it happens — a drop on our own window arrives through
     /// NSDraggingDestination separately).
     var onDragEnded: (() -> Void)?
 
+    /// Types worth revealing the zone for. Plain strings are excluded: they
+    /// need no conversion, and including them would pop the zone out every
+    /// time a sentence is dragged around inside an editor.
+    private static let triggerTypes: [NSPasteboard.PasteboardType] = [.fileURL, .html, .rtf]
+
     private var monitors: [Any] = []
     private let dragPasteboard = NSPasteboard(name: .drag)
     private var sessionChangeCount: Int
-    private var fileDragActive = false
+    private var payloadDragActive = false
 
     init() {
         sessionChangeCount = dragPasteboard.changeCount
@@ -52,11 +58,12 @@ final class DragMonitor {
 
     private func handleDragged() {
         if dragPasteboard.changeCount != sessionChangeCount {
-            // A new drag session started; check whether it carries file URLs.
+            // A new drag session started; check whether it carries anything
+            // we can convert.
             sessionChangeCount = dragPasteboard.changeCount
-            fileDragActive = dragPasteboard.availableType(from: [.fileURL]) != nil
+            payloadDragActive = dragPasteboard.availableType(from: Self.triggerTypes) != nil
         }
-        guard fileDragActive else { return }
+        guard payloadDragActive else { return }
 
         let mouse = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) else {
@@ -68,8 +75,8 @@ final class DragMonitor {
     }
 
     private func handleUp() {
-        guard fileDragActive else { return }
-        fileDragActive = false
+        guard payloadDragActive else { return }
+        payloadDragActive = false
         onDragEnded?()
     }
 }

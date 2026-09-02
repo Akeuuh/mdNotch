@@ -230,6 +230,26 @@
           }
         }
       }
+    },
+    "Clipboard conversion failed" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Échec de la conversion du presse-papier"
+          }
+        }
+      }
+    },
+    "Clipboard conversion timed out" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Délai dépassé pour la conversion du presse-papier"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

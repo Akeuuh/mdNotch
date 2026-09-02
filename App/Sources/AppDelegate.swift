@@ -39,7 +39,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let notch = NotchWindowController(settings: settings)
         notch.onFilesDropped = { [weak self] urls in
-            self?.handleDrop(urls)
+            self?.convert(urls.map(ConversionSource.file))
+        }
+        notch.onTextDropped = { [weak self] pasted in
+            self?.convert([.pasted(pasted)])
         }
         notch.onSettingsRequested = { [weak self] in
             self?.settingsWindow?.show()
@@ -48,15 +51,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.notch = notch
     }
 
-    private func handleDrop(_ urls: [URL]) {
-        guard let notch, let pipeline, let settings, !isConverting else { return }
+    private func convert(_ sources: [ConversionSource]) {
+        guard let notch, let pipeline, let settings, !isConverting, !sources.isEmpty else { return }
         isConverting = true
         notch.beginConversion()
 
         let pipelineSettings = settings.pipelineSettings
         Task { @MainActor in
             defer { isConverting = false }
-            let result = await pipeline.process(urls: urls, settings: pipelineSettings)
+            let result = await pipeline.process(sources: sources, settings: pipelineSettings)
 
             guard !result.files.isEmpty else {
                 notch.collapseNow()
@@ -69,7 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 pasteboard.setString(payload, forType: .string)
             }
 
-            if result.failures.isEmpty && !result.files.isEmpty {
+            if result.failures.isEmpty {
                 notch.showSuccess()
             } else {
                 notch.showFailure(message: Self.failureMessage(for: result))
@@ -77,10 +80,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Short user-facing message covering every failed file of a drop.
+    /// Short user-facing message covering every failed source of a run.
     static func failureMessage(for result: PipelineResult) -> String {
         result.failures.compactMap { file -> String? in
             guard case .failure(let error) = file.outcome else { return nil }
+            if case .pasted = file.source {
+                // The clipboard has no file name worth showing.
+                switch error {
+                case .timedOut:
+                    return String(localized: "Clipboard conversion timed out")
+                case .unsupportedFormat, .conversionFailed:
+                    return String(localized: "Clipboard conversion failed")
+                }
+            }
             switch error {
             case .unsupportedFormat(let fileName):
                 return String(localized: "Unsupported format: \(fileName)")
