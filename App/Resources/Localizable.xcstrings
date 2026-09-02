@@ -250,6 +250,66 @@
           }
         }
       }
+    },
+    "Click the field and press the keys. ⌫ clears it, ⎋ cancels. The menu bar item converts the clipboard with no shortcut at all." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cliquez dans le champ et appuyez sur les touches. ⌫ efface le raccourci, ⎋ annule. L’élément de la barre des menus convertit le presse-papier sans aucun raccourci."
+          }
+        }
+      }
+    },
+    "Convert clipboard" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convertir le presse-papier"
+          }
+        }
+      }
+    },
+    "Convert clipboard shortcut" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Raccourci de conversion du presse-papier"
+          }
+        }
+      }
+    },
+    "Not set" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non défini"
+          }
+        }
+      }
+    },
+    "Nothing to convert in the clipboard" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rien à convertir dans le presse-papier"
+          }
+        }
+      }
+    },
+    "Type a shortcut" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tapez un raccourci"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

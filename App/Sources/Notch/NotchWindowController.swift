@@ -112,9 +112,10 @@ final class NotchWindowController {
         panel.orderFrontRegardless()
     }
 
-    /// Call when dropped files start converting: spinner + glow.
+    /// Call when a conversion starts: spinner + glow.
     func beginConversion() {
         collapseTask?.cancel()
+        placeIfHidden()
         state.phase = .converting
         // Nothing to click while it runs, and the window is wide enough to
         // cover part of the menu bar — let events through.
@@ -131,6 +132,8 @@ final class NotchWindowController {
     /// Call when at least one file failed: red cross + message,
     /// collapse on click or after ~4 s.
     func showFailure(message: String) {
+        collapseTask?.cancel()
+        placeIfHidden()
         state.phase = .failure(message: message)
         // Dismissable by clicking it.
         panel.ignoresMouseEvents = false
@@ -193,6 +196,22 @@ final class NotchWindowController {
         }
     }
 
+    /// Brings the zone out on the active screen when nothing is showing yet.
+    /// A paste has no drag to reveal it, and the settings pill sits at a
+    /// different frame; a conversion already on screen is left alone, so its
+    /// feedback never jumps to another display.
+    private func placeIfHidden() {
+        switch state.phase {
+        case .idle, .settingsHover:
+            guard let screen = Self.activeScreen else { return }
+            state.anchor = anchor
+            state.topInset = NotchGeometry.contentTopInset(for: anchor, on: screen)
+            reveal(NotchGeometry.windowFrame(for: anchor, on: screen))
+        default:
+            return
+        }
+    }
+
     /// Positions the panel and makes it interactive.
     private func reveal(_ frame: NSRect) {
         panel.setFrame(frame, display: true)
@@ -213,6 +232,12 @@ final class NotchWindowController {
         return false
     }
 
+    /// Screen the user is currently working on: the one under the pointer,
+    /// falling back to the main one.
+    private static var activeScreen: NSScreen? {
+        let mouse = NSEvent.mouseLocation
+        return NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
+    }
 
     private func scheduleCollapse(after seconds: Double) {
         collapseTask?.cancel()

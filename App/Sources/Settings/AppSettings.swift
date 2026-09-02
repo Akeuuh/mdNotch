@@ -16,6 +16,8 @@ final class AppSettings: ObservableObject {
         static let fixedFolderPath = "fixedFolderPath"
         static let launchAtLogin = "launchAtLogin"
         static let dropZoneAnchor = "dropZoneAnchor"
+        static let pasteHotKeyKeyCode = "pasteHotKeyKeyCode"
+        static let pasteHotKeyModifiers = "pasteHotKeyModifiers"
     }
 
     private let defaults: UserDefaults
@@ -34,6 +36,22 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(dropZoneAnchor.rawValue, forKey: Keys.dropZoneAnchor) }
     }
 
+    /// Shortcut that converts the clipboard from anywhere; nil for none.
+    /// Configurable, and clearable, because the default may already belong to
+    /// an app the user cares about — and a stolen combination is impossible
+    /// to detect from our side (see `GlobalHotKey`). The menu bar item works
+    /// either way.
+    @Published var pasteHotKey: KeyCombo? {
+        didSet {
+            KeyCombo.write(
+                pasteHotKey,
+                to: defaults,
+                keyCodeKey: Keys.pasteHotKeyKeyCode,
+                modifiersKey: Keys.pasteHotKeyModifiers
+            )
+        }
+    }
+
     @Published var launchAtLogin: Bool {
         didSet {
             defaults.set(launchAtLogin, forKey: Keys.launchAtLogin)
@@ -49,6 +67,12 @@ final class AppSettings: ObservableObject {
         fixedFolderURL = defaults.string(forKey: Keys.fixedFolderPath).map(URL.init(fileURLWithPath:))
         dropZoneAnchor = defaults.string(forKey: Keys.dropZoneAnchor)
             .flatMap(DropZoneAnchor.init(rawValue:)) ?? .notch
+        pasteHotKey = KeyCombo.read(
+            from: defaults,
+            keyCodeKey: Keys.pasteHotKeyKeyCode,
+            modifiersKey: Keys.pasteHotKeyModifiers,
+            fallback: .defaultPaste
+        )
 
         // Enabled by default on first launch.
         if defaults.object(forKey: Keys.launchAtLogin) == nil {

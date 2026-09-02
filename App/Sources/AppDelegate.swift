@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import MdNotchCore
 
 @main
@@ -9,6 +10,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pipeline: ConversionPipeline?
     private var settings: AppSettings?
     private var settingsWindow: SettingsWindowController?
+    private var pasteHotKeyRegistration: GlobalHotKey?
+    private var cancellables: Set<AnyCancellable> = []
     private var isConverting = false
 
     static func main() {
@@ -28,9 +31,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let settingsWindow = SettingsWindowController(settings: settings)
         self.settingsWindow = settingsWindow
 
-        statusBar = StatusBarController(settings: settings, onSettings: { [weak self] in
-            self?.settingsWindow?.show()
-        })
+        statusBar = StatusBarController(
+            settings: settings,
+            onSettings: { [weak self] in
+                self?.settingsWindow?.show()
+            },
+            onConvertClipboard: { [weak self] in
+                self?.convertClipboard()
+            }
+        )
 
         let converterURL = Bundle.main.resourceURL!
             .appendingPathComponent("markitdown-bin")
@@ -49,6 +58,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         notch.start()
         self.notch = notch
+
+        applyPasteHotKey(settings.pasteHotKey)
+        settings.$pasteHotKey
+            .dropFirst()
+            .sink { [weak self] combo in
+                MainActor.assumeIsolated {
+                    self?.applyPasteHotKey(combo)
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Hotkey and menu bar item both land here: take whatever the clipboard
+    /// holds and convert it in place.
+    private func convertClipboard() {
+        guard let pasted = PasteboardReader.read(from: .general) else {
+            // Silence would be indistinguishable from a broken shortcut.
+            notch?.showFailure(message: String(localized: "Nothing to convert in the clipboard"))
+            return
+        }
+        convert([.pasted(pasted)])
     }
 
     private func convert(_ sources: [ConversionSource]) {
@@ -77,6 +107,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 notch.showFailure(message: Self.failureMessage(for: result))
             }
+        }
+    }
+
+    /// Replaces the registration whenever the user picks another shortcut.
+    /// The old one is released by `GlobalHotKey.deinit`, so dropping the
+    /// reference is enough.
+    private func applyPasteHotKey(_ combo: KeyCombo?) {
+        pasteHotKeyRegistration = nil
+        guard let combo else { return }
+        pasteHotKeyRegistration = GlobalHotKey(combo: combo) { [weak self] in
+            self?.convertClipboard()
         }
     }
 

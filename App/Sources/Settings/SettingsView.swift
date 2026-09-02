@@ -39,6 +39,19 @@ struct SettingsView: View {
             }
 
             Section {
+                HStack {
+                    Text("Convert clipboard shortcut")
+                    Spacer()
+                    HotKeyRecorder(combo: $settings.pasteHotKey)
+                        .frame(width: 130, height: 24)
+                }
+            } footer: {
+                Text("Click the field and press the keys. ⌫ clears it, ⎋ cancels. The menu bar item converts the clipboard with no shortcut at all.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 Toggle(String(localized: "Launch at login"), isOn: $settings.launchAtLogin)
             }
         }
