@@ -1,6 +1,6 @@
 # mdNotch — Spécification
 
-App macOS qui vit sous la notch : glisser-déposer un document, il est converti en Markdown, copié dans le presse-papier et enregistré en fichier `.md`. Zéro dépendance à installer pour l'utilisateur.
+App macOS qui vit sous la notch : glisser-déposer un document, il est converti en Markdown, copié dans le presse-papier et enregistré en fichier `.md`. Du texte riche collé (⌘⇧V) est converti de la même façon, sans fichier. Zéro dépendance à installer pour l'utilisateur.
 
 ## 1. Plateforme & stack
 
@@ -24,6 +24,8 @@ markitdown est une lib Python. Contrainte « zéro dépendance » ⇒ on embarqu
 - **Drag de fichier vers le haut-centre de l'écran** → zone de drop s'étend sous la notch (animation).
 - **Mac sans notch** (iMac, Mac mini, écran externe) : même comportement, ancré haut-centre — la notch n'est qu'un ancrage visuel.
 - **Survol souris de la zone notch** → petit engrenage apparaît (accès réglages).
+- **Drag d'une sélection de texte riche** (navigateur, traitement de texte) → même zone, même conversion. Le texte **brut** est volontairement ignoré comme déclencheur : il n'a rien à convertir, et la zone sortirait à chaque déplacement de phrase dans un éditeur.
+- **Raccourci clavier (⌘⇧V par défaut, configurable) ou « Convert clipboard »** (menu barre de menus) → convertit le presse-papier depuis n'importe où, sans drag. La zone sort d'elle-même pour montrer le spinner puis le résultat.
 
 ### États visuels
 
@@ -65,6 +67,16 @@ Chaque drop produit **deux choses** :
 2. **Presse-papier** — contenu markdown en **texte brut** (pas de fichier).
    - Plusieurs fichiers → concaténation avec séparateur `# nom-du-fichier` avant chaque contenu.
 
+### Texte collé
+
+Un texte collé n'a pas de dossier d'origine : il ne produit **que** le presse-papier, jamais de fichier `.md`. Le réglage de destination ne s'applique pas.
+
+- **HTML** (copie depuis un navigateur, Notion, Google Docs) → converti par markitdown : titres, listes, tableaux et liens survivent.
+- **RTF** (Pages, TextEdit, Word) → ré-encodé en HTML avant conversion, pour la même raison.
+- **Texte brut** → déjà son propre markdown, recopié tel quel sans invoquer le convertisseur.
+
+Le presse-papier est la source *et* la destination : la conversion se fait sur place et le texte riche d'origine est perdu. Pas d'undo.
+
 ### Multi-drop
 
 Plusieurs fichiers acceptés. Conversion de chacun ; un échec n'empêche pas les autres. Les réussites vont dans le presse-papier + fichiers ; les échecs sont signalés dans la zone notch.
@@ -77,7 +89,7 @@ Plusieurs fichiers acceptés. Conversion de chacun ; un échec n'empêche pas le
 
 Deux points d'entrée :
 
-- **Icône barre de menus** (discrète) : Réglages, Launch at login, Quit.
+- **Icône barre de menus** (discrète) : Convert clipboard, Réglages, Launch at login, Quit.
 - **Engrenage au survol** de la zone notch → ouvre les réglages.
 
 ### Contenu des réglages
@@ -86,6 +98,18 @@ Deux points d'entrée :
 - Zone de dépôt : encoche (défaut) ou l'un des quatre coins de l'écran, pour
   les setups où une autre app occupe déjà l'encoche. La zone reste collée aux
   bords qu'elle touche ; seuls ses coins tournés vers l'intérieur sont arrondis.
+- Raccourci de conversion du presse-papier : **enregistreur** (clic dans le champ
+  puis frappe des touches ; ⌫ efface, ⎋ annule). Défaut ⌘⇧V, effaçable.
+  Configurable parce que la combinaison peut déjà appartenir à une autre app —
+  et ce conflit est **indétectable** de notre côté : quand deux apps enregistrent
+  la même combinaison, la première inscrite gagne et la seconde s'inscrit sans
+  erreur mais ne se déclenche jamais. L'item de la barre de menus reste
+  disponible dans tous les cas, et affiche le raccourci configuré.
+  Au moins un modificateur parmi ⌘/⌃/⌥ est exigé : ⇧ seul ferait avaler une
+  frappe ordinaire partout. Le raccourci passe par Carbon
+  (`RegisterEventHotKey`) : aucune permission Accessibilité demandée. Le code
+  touche est **physique**, donc son libellé est relu dans la disposition clavier
+  courante (`UCKeyTranslate`) à chaque affichage, jamais stocké.
 - Launch at login (on/off, défaut on).
 
 ## 6. Localisation

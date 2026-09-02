@@ -1,15 +1,17 @@
 import AppKit
 import Combine
+import MdNotchCore
 import SwiftUI
 
 /// Borderless always-on-top panel anchored under the notch (or in a screen
 /// corner, per `AppSettings.dropZoneAnchor`). Invisible at rest; extends when
-/// a file drag comes near; accepts drops and hands the URLs to
-/// `onFilesDropped`.
+/// a convertible drag comes near; accepts drops and hands files to
+/// `onFilesDropped`, dragged selections to `onTextDropped`.
 @MainActor
 final class NotchWindowController {
     let state = NotchState()
     var onFilesDropped: (([URL]) -> Void)?
+    var onTextDropped: ((PastedText) -> Void)?
     var onSettingsRequested: (() -> Void)?
 
     private let settings: AppSettings
@@ -47,7 +49,10 @@ final class NotchWindowController {
             self.state.phase = .dropTarget(hovering: false)
         }
         dropView.onFilesDropped = { [weak self] urls in
-            self?.handleDrop(urls)
+            self?.onFilesDropped?(urls)
+        }
+        dropView.onTextDropped = { [weak self] pasted in
+            self?.onTextDropped?(pasted)
         }
         dropView.canAcceptDrop = { [weak self] in
             guard let self else { return false }
@@ -107,25 +112,28 @@ final class NotchWindowController {
         panel.orderFrontRegardless()
     }
 
-    /// Call when dropped files start converting: spinner + glow.
+    /// Call when a conversion starts: spinner + glow.
     func beginConversion() {
         collapseTask?.cancel()
+        placeIfHidden()
         state.phase = .converting
         // Nothing to click while it runs, and the window is wide enough to
         // cover part of the menu bar — let events through.
         panel.ignoresMouseEvents = true
     }
 
-    /// Call when the pipeline finished. Success: green check + "Copied",
+    /// Call when the pipeline finished. Success: green check + `message`,
     /// auto-collapse after ~2 s.
-    func showSuccess() {
-        state.phase = .success
+    func showSuccess(message: String) {
+        state.phase = .success(message: message)
         scheduleCollapse(after: 2)
     }
 
     /// Call when at least one file failed: red cross + message,
     /// collapse on click or after ~4 s.
     func showFailure(message: String) {
+        collapseTask?.cancel()
+        placeIfHidden()
         state.phase = .failure(message: message)
         // Dismissable by clicking it.
         panel.ignoresMouseEvents = false
@@ -188,6 +196,22 @@ final class NotchWindowController {
         }
     }
 
+    /// Brings the zone out on the active screen when nothing is showing yet.
+    /// A paste has no drag to reveal it, and the settings pill sits at a
+    /// different frame; a conversion already on screen is left alone, so its
+    /// feedback never jumps to another display.
+    private func placeIfHidden() {
+        switch state.phase {
+        case .idle, .settingsHover:
+            guard let screen = Self.activeScreen else { return }
+            state.anchor = anchor
+            state.topInset = NotchGeometry.contentTopInset(for: anchor, on: screen)
+            reveal(NotchGeometry.windowFrame(for: anchor, on: screen))
+        default:
+            return
+        }
+    }
+
     /// Positions the panel and makes it interactive.
     private func reveal(_ frame: NSRect) {
         panel.setFrame(frame, display: true)
@@ -208,8 +232,11 @@ final class NotchWindowController {
         return false
     }
 
-    private func handleDrop(_ urls: [URL]) {
-        onFilesDropped?(urls)
+    /// Screen the user is currently working on: the one under the pointer,
+    /// falling back to the main one.
+    private static var activeScreen: NSScreen? {
+        let mouse = NSEvent.mouseLocation
+        return NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
     }
 
     private func scheduleCollapse(after seconds: Double) {

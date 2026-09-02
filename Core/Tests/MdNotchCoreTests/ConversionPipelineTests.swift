@@ -75,8 +75,8 @@ final class ConversionPipelineTests: XCTestCase {
         let result = await pipeline.process(urls: [source], settings: PipelineSettings())
 
         let expected = tempDir.appendingPathComponent("report.md")
-        guard case .success(_, let outputURL) = result.files[0].outcome else {
-            return XCTFail("expected success")
+        guard case .success(_, .some(let outputURL)) = result.files[0].outcome else {
+            return XCTFail("expected success with an output file")
         }
         XCTAssertEqual(outputURL.standardizedFileURL, expected.standardizedFileURL)
         XCTAssertEqual(try String(contentsOf: expected, encoding: .utf8), "# Hello")
@@ -194,9 +194,9 @@ final class ConversionPipelineTests: XCTestCase {
         let second = await pipeline.process(urls: [source], settings: PipelineSettings())
 
         XCTAssertEqual(try String(contentsOf: existing, encoding: .utf8), "existing", "must never overwrite")
-        guard case .success(_, let firstURL) = first.files[0].outcome,
-              case .success(_, let secondURL) = second.files[0].outcome else {
-            return XCTFail("expected successes")
+        guard case .success(_, .some(let firstURL)) = first.files[0].outcome,
+              case .success(_, .some(let secondURL)) = second.files[0].outcome else {
+            return XCTFail("expected successes with output files")
         }
         XCTAssertEqual(firstURL.lastPathComponent, "rapport-1.md")
         XCTAssertEqual(secondURL.lastPathComponent, "rapport-2.md")
@@ -215,9 +215,9 @@ final class ConversionPipelineTests: XCTestCase {
 
         let result = await pipeline.process(urls: [good, unsupported, bad], settings: PipelineSettings())
 
-        XCTAssertEqual(result.successes.map(\.sourceURL.lastPathComponent), ["good.pdf"])
+        XCTAssertEqual(result.successes.map(\.source.displayName), ["good.pdf"])
         XCTAssertEqual(
-            result.failures.map(\.sourceURL.lastPathComponent).sorted(),
+            result.failures.map(\.source.displayName).sorted(),
             ["corrupt.docx", "photo.png"]
         )
         // Successes still reach the clipboard and disk.
@@ -241,5 +241,182 @@ final class ConversionPipelineTests: XCTestCase {
         XCTAssertEqual(result.successes.count, 2)
         XCTAssertTrue(FileManager.default.fileExists(atPath: dest.appendingPathComponent("one.md").path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: dest.appendingPathComponent("two.md").path))
+    }
+
+    // MARK: - Pasted text
+
+    func testPastedHTMLIsConvertedAndReachesTheClipboard() async throws {
+        let converter = FakeConverter(markdown: "# Pasted")
+        let pipeline = ConversionPipeline(converter: converter)
+
+        let result = await pipeline.process(
+            sources: [.pasted(PastedText(text: "<h1>Pasted</h1>", flavor: .html))],
+            settings: PipelineSettings()
+        )
+
+        XCTAssertEqual(result.clipboardPayload, "# Pasted")
+        XCTAssertEqual(converter.invocations.count, 1)
+        // markitdown picks its converter from the extension.
+        XCTAssertEqual(converter.invocations[0].pathExtension, "html")
+    }
+
+    func testPastedTextNeverWritesAnOutputFile() async throws {
+        let dest = tempDir.appendingPathComponent("outbox")
+        try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
+        let pipeline = ConversionPipeline(converter: FakeConverter(markdown: "# md"))
+
+        let result = await pipeline.process(
+            sources: [.pasted(PastedText(text: "<p>hi</p>", flavor: .html))],
+            settings: PipelineSettings(destination: .fixedFolder(dest))
+        )
+
+        guard case .success(_, let outputURL) = result.files[0].outcome else {
+            return XCTFail("expected success, got \(result.files[0].outcome)")
+        }
+        XCTAssertNil(outputURL, "a paste has no source folder: nothing goes to disk")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dest.path), [])
+    }
+
+    func testPastedHTMLScratchFileIsDeletedAfterConversion() async throws {
+        let converter = FakeConverter(markdown: "# md")
+        let pipeline = ConversionPipeline(converter: converter)
+
+        _ = await pipeline.process(
+            sources: [.pasted(PastedText(text: "<p>hi</p>", flavor: .html))],
+            settings: PipelineSettings()
+        )
+
+        let scratch = try XCTUnwrap(converter.invocations.first)
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: scratch.deletingLastPathComponent().path),
+            "the scratch directory must not outlive the conversion"
+        )
+    }
+
+    func testPastedPlainTextIsPassedThroughWithoutInvokingConverter() async throws {
+        let converter = FakeConverter(markdown: "# should not be used")
+        let pipeline = ConversionPipeline(converter: converter)
+
+        let result = await pipeline.process(
+            sources: [.pasted(PastedText(text: "already **markdown**", flavor: .plain))],
+            settings: PipelineSettings()
+        )
+
+        XCTAssertEqual(result.clipboardPayload, "already **markdown**")
+        XCTAssertTrue(converter.invocations.isEmpty, "plain text is already its own markdown")
+    }
+
+    func testPastedConversionFailureIsReportedWithoutClipboardPayload() async throws {
+        let pipeline = ConversionPipeline(converter: FakeConverter { _ in throw FakeFailure() })
+
+        let result = await pipeline.process(
+            sources: [.pasted(PastedText(text: "<p>hi</p>", flavor: .html))],
+            settings: PipelineSettings()
+        )
+
+        guard case .failure(.conversionFailed(let fileName, _)) = result.files[0].outcome else {
+            return XCTFail("expected conversionFailed, got \(result.files[0].outcome)")
+        }
+        XCTAssertEqual(fileName, "clipboard")
+        XCTAssertNil(result.clipboardPayload)
+    }
+
+    // MARK: - Plain text that is really an HTML document
+
+    func testHTMLSourcePastedAsPlainTextIsRecognisedAndConverted() async throws {
+        // Copying an .html file out of an editor puts markup on the pasteboard
+        // as plain text, with no rich flavor at all.
+        let source = """
+        <!DOCTYPE html>
+        <html lang="en"><head><title>t</title></head>
+        <body><h1>Title</h1></body></html>
+        """
+        let converter = FakeConverter(markdown: "# Title")
+        let pipeline = ConversionPipeline(converter: converter)
+
+        let result = await pipeline.process(
+            sources: [.pasted(.fromPlainText(source))],
+            settings: PipelineSettings()
+        )
+
+        XCTAssertEqual(result.clipboardPayload, "# Title")
+        XCTAssertEqual(converter.invocations.count, 1, "an HTML document must reach the converter")
+        XCTAssertFalse(result.changedNothing)
+    }
+
+    func testHTMLDocumentBehindALeadingCommentIsStillRecognised() {
+        let source = """
+        <!-- generated, do not edit -->
+        <html><body><p>hi</p></body></html>
+        """
+        XCTAssertEqual(PastedText.fromPlainText(source).flavor, .html)
+    }
+
+    func testProseAndMarkdownMentioningTagsStayPlain() {
+        let cases = [
+            "Use <b>bold</b> sparingly in prose.",
+            "```html\n<html><body>example</body></html>\n```",
+            "# A markdown heading\n\nwith a <div> mentioned mid-sentence.",
+            "plain sentence, no markup at all",
+            "",
+        ]
+        for text in cases {
+            XCTAssertEqual(
+                PastedText.fromPlainText(text).flavor,
+                .plain,
+                "must stay plain: \(text.prefix(30))"
+            )
+        }
+    }
+
+    func testUnchangedPasteIsReportedAsSuch() async throws {
+        let converter = FakeConverter(markdown: "# never used")
+        let pipeline = ConversionPipeline(converter: converter)
+
+        let result = await pipeline.process(
+            sources: [.pasted(.fromPlainText("already **markdown**"))],
+            settings: PipelineSettings()
+        )
+
+        XCTAssertTrue(result.changedNothing, "plain text copied back untouched is not a conversion")
+        XCTAssertTrue(converter.invocations.isEmpty)
+    }
+
+    func testConvertedPasteIsNotReportedAsUnchanged() async throws {
+        let pipeline = ConversionPipeline(converter: FakeConverter(markdown: "# Pasted"))
+
+        let result = await pipeline.process(
+            sources: [.pasted(PastedText(text: "<h1>Pasted</h1>", flavor: .html))],
+            settings: PipelineSettings()
+        )
+
+        XCTAssertFalse(result.changedNothing)
+    }
+
+    func testFileConversionIsNeverReportedAsUnchanged() async throws {
+        let source = try makeSourceFile(named: "report.pdf", contents: "# same")
+        let pipeline = ConversionPipeline(converter: FakeConverter(markdown: "# same"))
+
+        let result = await pipeline.process(urls: [source], settings: PipelineSettings())
+
+        XCTAssertFalse(result.changedNothing, "a file always went through the converter")
+    }
+
+    func testPastedConversionExceedingTimeoutIsInterrupted() async throws {
+        let slowConverter = FakeConverter { _ in
+            try await Task.sleep(for: .seconds(5))
+            return "# too late"
+        }
+        let pipeline = ConversionPipeline(converter: slowConverter, timeout: .milliseconds(50))
+
+        let result = await pipeline.process(
+            sources: [.pasted(PastedText(text: "<p>hi</p>", flavor: .html))],
+            settings: PipelineSettings()
+        )
+
+        guard case .failure(.timedOut(let fileName)) = result.files[0].outcome else {
+            return XCTFail("expected timedOut, got \(result.files[0].outcome)")
+        }
+        XCTAssertEqual(fileName, "clipboard")
     }
 }

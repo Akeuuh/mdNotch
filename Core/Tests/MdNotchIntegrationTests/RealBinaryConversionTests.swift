@@ -62,7 +62,7 @@ final class RealBinaryConversionTests: XCTestCase {
             urls: [source],
             settings: PipelineSettings(destination: .fixedFolder(outputDir))
         )
-        guard case .success(let markdown, let outputURL) = result.files[0].outcome else {
+        guard case .success(let markdown, .some(let outputURL)) = result.files[0].outcome else {
             return XCTFail("\(name): expected success, got \(result.files[0].outcome)", file: file, line: line)
         }
         XCTAssertFalse(
@@ -123,5 +123,56 @@ final class RealBinaryConversionTests: XCTestCase {
         XCTAssertNil(result.clipboardPayload)
         let contents = try FileManager.default.contentsOfDirectory(atPath: outputDir.path)
         XCTAssertTrue(contents.isEmpty, "no output file may be produced for a rejected format")
+    }
+
+    // MARK: - Pasted clipboard HTML
+
+    func testPastedHTMLBecomesMarkdownWithoutTouchingDisk() async throws {
+        let html = """
+        <h1>\(Self.marker)</h1>
+        <p>A <strong>bold</strong> claim and a <a href="https://example.com">link</a>.</p>
+        <ul><li>first</li><li>second</li></ul>
+        """
+        let result = await pipeline.process(
+            sources: [.pasted(PastedText(text: html, flavor: .html))],
+            settings: PipelineSettings(destination: .fixedFolder(outputDir))
+        )
+
+        guard case .success(let markdown, let outputURL) = result.files[0].outcome else {
+            return XCTFail("pasted html: expected success, got \(result.files[0].outcome)")
+        }
+        XCTAssertNil(outputURL)
+        XCTAssertTrue(markdown.contains("# \(Self.marker)"), "the heading must survive as a markdown heading")
+        XCTAssertTrue(markdown.contains("**bold**"), "inline emphasis must survive")
+        XCTAssertTrue(markdown.contains("(https://example.com)"), "links must survive")
+        let contents = try FileManager.default.contentsOfDirectory(atPath: outputDir.path)
+        XCTAssertTrue(contents.isEmpty, "a paste has no source folder: nothing goes to disk")
+    }
+
+    /// The case that looks like a paste failure but isn't one: an `.html` file
+    /// copied out of a text editor reaches us as plain text carrying markup.
+    func testHTMLSourceCopiedAsPlainTextIsConvertedNotEchoed() async throws {
+        let source = """
+        <!DOCTYPE html>
+        <html lang="en">
+        <head><meta charset="utf-8"><title>\(Self.marker)</title></head>
+        <body>
+          <h1>\(Self.marker)</h1>
+          <p>A <strong>bold</strong> claim.</p>
+        </body>
+        </html>
+        """
+        let result = await pipeline.process(
+            sources: [.pasted(.fromPlainText(source))],
+            settings: PipelineSettings()
+        )
+
+        guard case .success(let markdown, _) = result.files[0].outcome else {
+            return XCTFail("html source: expected success, got \(result.files[0].outcome)")
+        }
+        XCTAssertFalse(result.changedNothing, "the markup must not come back untouched")
+        XCTAssertFalse(markdown.contains("<h1>"), "no tags may survive in the markdown")
+        XCTAssertTrue(markdown.contains("# \(Self.marker)"))
+        XCTAssertTrue(markdown.contains("**bold**"))
     }
 }

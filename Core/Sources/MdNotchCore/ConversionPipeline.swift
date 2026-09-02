@@ -1,9 +1,9 @@
 import Foundation
 
-/// Orchestrator: takes dropped file URLs and settings, returns per-file
-/// results plus the clipboard payload. Owns every observable behavior
-/// (format gating, naming, concatenation, partial failures, timeout);
-/// the UI stays a thin layer above it.
+/// Orchestrator: takes sources (dropped files, or pasted text) and settings,
+/// returns per-source results plus the clipboard payload. Owns every
+/// observable behavior (format gating, naming, concatenation, partial
+/// failures, timeout); the UI stays a thin layer above it.
 public struct ConversionPipeline: Sendable {
     private let converter: MarkdownConverter
     private let timeout: Duration
@@ -13,38 +13,81 @@ public struct ConversionPipeline: Sendable {
         self.timeout = timeout
     }
 
+    /// Convenience for the dominant case, a drop of files.
     public func process(urls: [URL], settings: PipelineSettings) async -> PipelineResult {
-        var files: [FileConversionResult] = []
+        await process(sources: urls.map(ConversionSource.file), settings: settings)
+    }
 
-        for url in urls {
-            files.append(await processOne(url: url, settings: settings))
+    public func process(sources: [ConversionSource], settings: PipelineSettings) async -> PipelineResult {
+        var files: [SourceConversionResult] = []
+
+        for source in sources {
+            files.append(await processOne(source: source, settings: settings))
         }
 
         return PipelineResult(files: files, clipboardPayload: Self.clipboardPayload(for: files))
     }
 
-    private func processOne(url: URL, settings: PipelineSettings) async -> FileConversionResult {
+    private func processOne(source: ConversionSource, settings: PipelineSettings) async -> SourceConversionResult {
+        switch source {
+        case .file(let url):
+            return await processFile(url: url, settings: settings)
+        case .pasted(let pasted):
+            return await processPasted(pasted)
+        }
+    }
+
+    private func processFile(url: URL, settings: PipelineSettings) async -> SourceConversionResult {
+        let source = ConversionSource.file(url)
         let fileName = url.lastPathComponent
 
         guard SupportedFormat.isSupported(url) else {
-            return FileConversionResult(sourceURL: url, outcome: .failure(.unsupportedFormat(fileName: fileName)))
+            return SourceConversionResult(source: source, outcome: .failure(.unsupportedFormat(fileName: fileName)))
         }
 
         do {
             let markdown = try await convertWithTimeout(url: url, fileName: fileName)
             let outputURL = try write(markdown: markdown, for: url, settings: settings)
-            return FileConversionResult(sourceURL: url, outcome: .success(markdown: markdown, outputURL: outputURL))
+            return SourceConversionResult(source: source, outcome: .success(markdown: markdown, outputURL: outputURL))
         } catch let error as ConversionError {
-            return FileConversionResult(sourceURL: url, outcome: .failure(error))
+            return SourceConversionResult(source: source, outcome: .failure(error))
         } catch {
-            return FileConversionResult(
-                sourceURL: url,
+            return SourceConversionResult(
+                source: source,
                 outcome: .failure(.conversionFailed(fileName: fileName, detail: String(describing: error)))
             )
         }
     }
 
-    /// Races the converter against the per-file timeout; the loser is
+    /// Pasted text has no folder, so nothing is written to disk — the markdown
+    /// only reaches the clipboard. Plain text is already markdown and skips
+    /// the converter entirely; HTML goes through a scratch file, because the
+    /// converter takes URLs.
+    private func processPasted(_ pasted: PastedText) async -> SourceConversionResult {
+        let source = ConversionSource.pasted(pasted)
+
+        guard pasted.flavor == .html else {
+            return SourceConversionResult(source: source, outcome: .success(markdown: pasted.text, outputURL: nil))
+        }
+
+        do {
+            let scratch = try Self.makeScratchDirectory()
+            defer { try? FileManager.default.removeItem(at: scratch) }
+            let url = scratch.appendingPathComponent("clipboard.html")
+            try pasted.text.write(to: url, atomically: true, encoding: .utf8)
+            let markdown = try await convertWithTimeout(url: url, fileName: source.displayName)
+            return SourceConversionResult(source: source, outcome: .success(markdown: markdown, outputURL: nil))
+        } catch let error as ConversionError {
+            return SourceConversionResult(source: source, outcome: .failure(error))
+        } catch {
+            return SourceConversionResult(
+                source: source,
+                outcome: .failure(.conversionFailed(fileName: source.displayName, detail: String(describing: error)))
+            )
+        }
+    }
+
+    /// Races the converter against the per-source timeout; the loser is
     /// cancelled (the subprocess converter kills its child on cancellation).
     private func convertWithTimeout(url: URL, fileName: String) async throws -> String {
         let converter = self.converter
@@ -65,13 +108,13 @@ public struct ConversionPipeline: Sendable {
         }
     }
 
-    /// Successful markdowns in drop order. A single success goes to the
-    /// clipboard as-is; several are concatenated with a `# file-name`
+    /// Successful markdowns in source order. A single success goes to the
+    /// clipboard as-is; several are concatenated with a `# source-name`
     /// separator before each content.
-    private static func clipboardPayload(for files: [FileConversionResult]) -> String? {
+    private static func clipboardPayload(for files: [SourceConversionResult]) -> String? {
         let successes = files.compactMap { file -> (name: String, markdown: String)? in
             if case .success(let markdown, _) = file.outcome {
-                return (file.sourceURL.lastPathComponent, markdown)
+                return (file.source.displayName, markdown)
             }
             return nil
         }
@@ -85,6 +128,15 @@ public struct ConversionPipeline: Sendable {
                 .map { "# \($0.name)\n\n\($0.markdown)" }
                 .joined(separator: "\n\n")
         }
+    }
+
+    /// Private scratch directory for one paste, deleted as soon as the
+    /// converter is done with it.
+    private static func makeScratchDirectory() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mdnotch-paste-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
     }
 
     private func write(markdown: String, for source: URL, settings: PipelineSettings) throws -> URL {

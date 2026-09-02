@@ -12,8 +12,9 @@ final class NotchState: ObservableObject {
         case dropTarget(hovering: Bool)
         /// Files were dropped, conversion is running (spinner + glow).
         case converting
-        /// Conversion succeeded: green check + "Copied", then auto-collapse.
-        case success
+        /// Conversion succeeded: green check + a short claim ("Copied", or
+        /// "Copied as-is" when nothing needed converting), then auto-collapse.
+        case success(message: String)
         /// At least one file failed: red cross + short message(s).
         /// Collapses on click or after ~4 s.
         case failure(message: String)
