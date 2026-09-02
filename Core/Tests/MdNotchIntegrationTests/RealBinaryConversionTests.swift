@@ -149,4 +149,29 @@ final class RealBinaryConversionTests: XCTestCase {
         XCTAssertTrue(contents.isEmpty, "a paste has no source folder: nothing goes to disk")
     }
 
+    /// The case that looks like a paste failure but isn't one: an `.html` file
+    /// copied out of a text editor reaches us as plain text carrying markup.
+    func testHTMLSourceCopiedAsPlainTextIsConvertedNotEchoed() async throws {
+        let source = """
+        <!DOCTYPE html>
+        <html lang="en">
+        <head><meta charset="utf-8"><title>\(Self.marker)</title></head>
+        <body>
+          <h1>\(Self.marker)</h1>
+          <p>A <strong>bold</strong> claim.</p>
+        </body>
+        </html>
+        """
+        let result = await pipeline.process(
+            sources: [.pasted(.fromPlainText(source))],
+            settings: PipelineSettings()
+        )
+
+        guard case .success(let markdown, _) = result.files[0].outcome else {
+            return XCTFail("html source: expected success, got \(result.files[0].outcome)")
+        }
+        XCTAssertFalse(markdown.contains("<h1>"), "no tags may survive in the markdown")
+        XCTAssertTrue(markdown.contains("# \(Self.marker)"))
+        XCTAssertTrue(markdown.contains("**bold**"))
+    }
 }

@@ -18,8 +18,10 @@ enum PasteboardReader {
         if let rtf = pasteboard.data(forType: .rtf), let html = htmlString(fromRTF: rtf), !isBlank(html) {
             return PastedText(text: html, flavor: .html)
         }
+        // Not necessarily plain: copying an .html file out of an editor lands
+        // here as markup-in-a-string. PastedText decides.
         if let plain = pasteboard.string(forType: .string), !isBlank(plain) {
-            return PastedText(text: plain, flavor: .plain)
+            return .fromPlainText(plain)
         }
         return nil
     }

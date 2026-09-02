@@ -321,6 +321,53 @@ final class ConversionPipelineTests: XCTestCase {
         XCTAssertNil(result.clipboardPayload)
     }
 
+    // MARK: - Plain text that is really an HTML document
+
+    func testHTMLSourcePastedAsPlainTextIsRecognisedAndConverted() async throws {
+        // Copying an .html file out of an editor puts markup on the pasteboard
+        // as plain text, with no rich flavor at all.
+        let source = """
+        <!DOCTYPE html>
+        <html lang="en"><head><title>t</title></head>
+        <body><h1>Title</h1></body></html>
+        """
+        let converter = FakeConverter(markdown: "# Title")
+        let pipeline = ConversionPipeline(converter: converter)
+
+        let result = await pipeline.process(
+            sources: [.pasted(.fromPlainText(source))],
+            settings: PipelineSettings()
+        )
+
+        XCTAssertEqual(result.clipboardPayload, "# Title")
+        XCTAssertEqual(converter.invocations.count, 1, "an HTML document must reach the converter")
+    }
+
+    func testHTMLDocumentBehindALeadingCommentIsStillRecognised() {
+        let source = """
+        <!-- generated, do not edit -->
+        <html><body><p>hi</p></body></html>
+        """
+        XCTAssertEqual(PastedText.fromPlainText(source).flavor, .html)
+    }
+
+    func testProseAndMarkdownMentioningTagsStayPlain() {
+        let cases = [
+            "Use <b>bold</b> sparingly in prose.",
+            "```html\n<html><body>example</body></html>\n```",
+            "# A markdown heading\n\nwith a <div> mentioned mid-sentence.",
+            "plain sentence, no markup at all",
+            "",
+        ]
+        for text in cases {
+            XCTAssertEqual(
+                PastedText.fromPlainText(text).flavor,
+                .plain,
+                "must stay plain: \(text.prefix(30))"
+            )
+        }
+    }
+
     func testPastedConversionExceedingTimeoutIsInterrupted() async throws {
         let slowConverter = FakeConverter { _ in
             try await Task.sleep(for: .seconds(5))
