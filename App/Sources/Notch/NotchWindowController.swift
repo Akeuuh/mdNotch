@@ -22,6 +22,7 @@ final class NotchWindowController {
     private var cancellables: Set<AnyCancellable> = []
 
     private var anchor: DropZoneAnchor { settings.dropZoneAnchor }
+    private var screens: DropZoneScreens { settings.dropZoneScreens }
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -101,12 +102,22 @@ final class NotchWindowController {
             }
             .store(in: &cancellables)
 
+        // Same for restricting the zone to fewer screens.
+        settings.$dropZoneScreens
+            .dropFirst()
+            .sink { [weak self] screens in
+                MainActor.assumeIsolated {
+                    self?.screensChanged(to: screens)
+                }
+            }
+            .store(in: &cancellables)
+
         hoverMonitor.onMouseMoved = { [weak self] location, screen in
             self?.mouseMoved(to: location, screen: screen)
         }
         hoverMonitor.start()
 
-        if let screen = NSScreen.main {
+        if let screen = screens.targetScreen() {
             panel.setFrame(NotchGeometry.windowFrame(for: anchor, on: screen), display: false)
         }
         panel.orderFrontRegardless()
@@ -145,7 +156,7 @@ final class NotchWindowController {
     }
 
     private func mouseMoved(to location: NSPoint, screen: NSScreen?) {
-        guard let screen else {
+        guard let screen, screens.includes(screen) else {
             if state.phase == .settingsHover { collapse() }
             return
         }
@@ -171,7 +182,7 @@ final class NotchWindowController {
     }
 
     private func dragMoved(near: Bool, screen: NSScreen?) {
-        if near, let screen {
+        if near, let screen, screens.includes(screen) {
             // Never interrupt an ongoing conversion or its feedback.
             guard state.phase == .idle || isDropTarget || state.phase == .settingsHover else { return }
             state.anchor = anchor
@@ -191,9 +202,22 @@ final class NotchWindowController {
         dragMonitor.anchor = anchor
         collapse()
         state.anchor = anchor
-        if let screen = NSScreen.main {
-            panel.setFrame(NotchGeometry.windowFrame(for: anchor, on: screen), display: false)
-        }
+        park(on: screens.targetScreen())
+    }
+
+    /// The allowed screens changed: the panel may be sitting on a display it
+    /// is no longer allowed on, so pull it back in and park it on the new
+    /// target.
+    private func screensChanged(to screens: DropZoneScreens) {
+        collapse()
+        park(on: screens.targetScreen())
+    }
+
+    /// Moves the hidden panel onto `screen`, so the next reveal doesn't
+    /// animate in from wherever it was left.
+    private func park(on screen: NSScreen?) {
+        guard let screen else { return }
+        panel.setFrame(NotchGeometry.windowFrame(for: anchor, on: screen), display: false)
     }
 
     /// Brings the zone out on the active screen when nothing is showing yet.
@@ -203,7 +227,7 @@ final class NotchWindowController {
     private func placeIfHidden() {
         switch state.phase {
         case .idle, .settingsHover:
-            guard let screen = Self.activeScreen else { return }
+            guard let screen = screens.targetScreen() else { return }
             state.anchor = anchor
             state.topInset = NotchGeometry.contentTopInset(for: anchor, on: screen)
             reveal(NotchGeometry.windowFrame(for: anchor, on: screen))
@@ -230,13 +254,6 @@ final class NotchWindowController {
     private var isDropTarget: Bool {
         if case .dropTarget = state.phase { return true }
         return false
-    }
-
-    /// Screen the user is currently working on: the one under the pointer,
-    /// falling back to the main one.
-    private static var activeScreen: NSScreen? {
-        let mouse = NSEvent.mouseLocation
-        return NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
     }
 
     private func scheduleCollapse(after seconds: Double) {

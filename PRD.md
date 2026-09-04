@@ -24,16 +24,17 @@ Une app macOS invisible au repos qui vit sous la notch. L'utilisateur glisse un 
 12. En tant qu'utilisateur, je veux une coche verte « Copied » qui se replie seule après ~2 s au succès, afin d'avoir confirmation sans avoir à cliquer.
 13. En tant qu'utilisateur, je veux une croix rouge avec un message court nommant le fichier en échec, qui se replie au clic ou après ~4 s, afin d'identifier le problème sans fenêtre ni notification système.
 14. En tant qu'utilisateur d'un Mac sans notch (iMac, Mac mini, écran externe), je veux le même comportement ancré en haut-centre de l'écran, afin de profiter de l'app quel que soit mon matériel.
-15. En tant qu'utilisateur, je veux que le `.md` soit enregistré par défaut à côté du fichier source, afin de retrouver la conversion là où vit le document.
-16. En tant qu'utilisateur, je veux pouvoir choisir dans les réglages un dossier fixe de destination, afin de centraliser toutes mes conversions au même endroit.
-17. En tant qu'utilisateur, je veux qu'un conflit de nom produise un suffixe automatique (`rapport-1.md`) sans dialogue ni écrasement, afin de ne jamais perdre un fichier existant ni casser mon geste.
-18. En tant qu'utilisateur, je veux une icône discrète dans la barre de menus (Réglages, Launch at login, Quit), afin de toujours pouvoir configurer ou quitter l'app.
-19. En tant qu'utilisateur, je veux un engrenage qui apparaît au survol de la zone notch, afin d'accéder aux réglages depuis le lieu même où j'utilise l'app.
-20. En tant qu'utilisateur, je veux que l'app se lance au démarrage par défaut (désactivable), afin qu'elle soit toujours prête sans y penser.
-21. En tant qu'utilisateur non technique, je veux installer l'app en glissant un `.app` depuis un DMG, sans Python, Homebrew ni terminal, afin de l'utiliser immédiatement.
-22. En tant qu'utilisateur, je veux que l'app fonctionne entièrement hors ligne, afin que mes documents ne quittent jamais ma machine.
-23. En tant qu'utilisateur macOS, je veux une app signée Developer ID et notarisée, afin de l'ouvrir sans avertissement Gatekeeper.
-24. En tant qu'utilisateur francophone ou anglophone, je veux l'interface et les messages d'erreur dans ma langue, afin de comprendre chaque retour de l'app.
+15. En tant qu'utilisateur multi-écrans, je veux choisir dans les réglages si la zone de drop répond sur tous les écrans (défaut), sur l'écran principal uniquement, ou sur un écran précis, afin qu'elle n'apparaisse pas sur un écran où je ne la veux pas.
+16. En tant qu'utilisateur, je veux que le `.md` soit enregistré par défaut à côté du fichier source, afin de retrouver la conversion là où vit le document.
+17. En tant qu'utilisateur, je veux pouvoir choisir dans les réglages un dossier fixe de destination, afin de centraliser toutes mes conversions au même endroit.
+18. En tant qu'utilisateur, je veux qu'un conflit de nom produise un suffixe automatique (`rapport-1.md`) sans dialogue ni écrasement, afin de ne jamais perdre un fichier existant ni casser mon geste.
+19. En tant qu'utilisateur, je veux une icône discrète dans la barre de menus (Réglages, Launch at login, Quit), afin de toujours pouvoir configurer ou quitter l'app.
+20. En tant qu'utilisateur, je veux un engrenage qui apparaît au survol de la zone notch, afin d'accéder aux réglages depuis le lieu même où j'utilise l'app.
+21. En tant qu'utilisateur, je veux que l'app se lance au démarrage par défaut (désactivable), afin qu'elle soit toujours prête sans y penser.
+22. En tant qu'utilisateur non technique, je veux installer l'app en glissant un `.app` depuis un DMG, sans Python, Homebrew ni terminal, afin de l'utiliser immédiatement.
+23. En tant qu'utilisateur, je veux que l'app fonctionne entièrement hors ligne, afin que mes documents ne quittent jamais ma machine.
+24. En tant qu'utilisateur macOS, je veux une app signée Developer ID et notarisée, afin de l'ouvrir sans avertissement Gatekeeper.
+25. En tant qu'utilisateur francophone ou anglophone, je veux l'interface et les messages d'erreur dans ma langue, afin de comprendre chaque retour de l'app.
 
 ## Implementation Decisions
 
