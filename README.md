@@ -24,6 +24,21 @@ xcodegen generate
 xcodebuild -project mdNotch.xcodeproj -scheme mdNotch -configuration Debug build
 ```
 
+## Running
+
+```bash
+# Debug build + launch, logs in the terminal, Ctrl-C quits
+scripts/run.sh
+
+# UI only, without the 179 MB converter (conversions fail)
+scripts/run.sh --stub-converter
+
+# --release for a Release build, --detach to get the prompt back
+```
+
+The script replaces any running instance: two would fight over the notch and
+the clipboard shortcut.
+
 ## Tests
 
 ```bash
