@@ -98,6 +98,12 @@ Deux points d'entrée :
 - Zone de dépôt : encoche (défaut) ou l'un des quatre coins de l'écran, pour
   les setups où une autre app occupe déjà l'encoche. La zone reste collée aux
   bords qu'elle touche ; seuls ses coins tournés vers l'intérieur sont arrondis.
+- Écrans actifs : tous les écrans (défaut), l'écran principal uniquement, ou un
+  écran précis. L'écran principal est celui qui porte la barre de menus
+  (origine du repère global), pas `NSScreen.main` qui suit la fenêtre active.
+  Un écran épinglé est retrouvé par `CGDirectDisplayID` puis, si l'ID a changé
+  au rebranchement, par son nom ; s'il est déconnecté, la zone retombe sur
+  l'écran principal plutôt que de disparaître.
 - Raccourci de conversion du presse-papier : **enregistreur** (clic dans le champ
   puis frappe des touches ; ⌫ efface, ⎋ annule). Défaut ⌘⇧V, effaçable.
   Configurable parce que la combinaison peut déjà appartenir à une autre app —

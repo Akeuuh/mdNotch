@@ -16,6 +16,7 @@ final class AppSettings: ObservableObject {
         static let fixedFolderPath = "fixedFolderPath"
         static let launchAtLogin = "launchAtLogin"
         static let dropZoneAnchor = "dropZoneAnchor"
+        static let dropZoneScreens = "dropZoneScreens"
         static let pasteHotKeyKeyCode = "pasteHotKeyKeyCode"
         static let pasteHotKeyModifiers = "pasteHotKeyModifiers"
     }
@@ -34,6 +35,12 @@ final class AppSettings: ObservableObject {
     /// already own the notch, leaving both zones unusable.
     @Published var dropZoneAnchor: DropZoneAnchor {
         didSet { defaults.set(dropZoneAnchor.rawValue, forKey: Keys.dropZoneAnchor) }
+    }
+
+    /// Displays the drop zone answers on. Every screen by default: a
+    /// multi-display user drags files on any of them.
+    @Published var dropZoneScreens: DropZoneScreens {
+        didSet { defaults.set(dropZoneScreens.rawValue, forKey: Keys.dropZoneScreens) }
     }
 
     /// Shortcut that converts the clipboard from anywhere; nil for none.
@@ -67,6 +74,8 @@ final class AppSettings: ObservableObject {
         fixedFolderURL = defaults.string(forKey: Keys.fixedFolderPath).map(URL.init(fileURLWithPath:))
         dropZoneAnchor = defaults.string(forKey: Keys.dropZoneAnchor)
             .flatMap(DropZoneAnchor.init(rawValue:)) ?? .notch
+        dropZoneScreens = defaults.string(forKey: Keys.dropZoneScreens)
+            .flatMap(DropZoneScreens.init(rawValue:)) ?? .all
         pasteHotKey = KeyCombo.read(
             from: defaults,
             keyCodeKey: Keys.pasteHotKeyKeyCode,

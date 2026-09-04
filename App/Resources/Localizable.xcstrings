@@ -320,6 +320,46 @@
           }
         }
       }
+    },
+    "Active on" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actif sur"
+          }
+        }
+      }
+    },
+    "All screens" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tous les écrans"
+          }
+        }
+      }
+    },
+    "Main screen only" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Écran principal uniquement"
+          }
+        }
+      }
+    },
+    "Pinning a screen that gets disconnected falls back to the main screen." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Si l’écran choisi est déconnecté, l’écran principal est utilisé."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
