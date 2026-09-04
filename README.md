@@ -17,12 +17,14 @@ machine (SPEC.md §1).
 brew install xcodegen uv
 
 # 1. Freeze the markitdown converter (once)
-scripts/freeze-markitdown/build.sh
+make freeze          # = scripts/freeze-markitdown/build.sh
 
 # 2. Generate the Xcode project and build
-xcodegen generate
-xcodebuild -project mdNotch.xcodeproj -scheme mdNotch -configuration Debug build
+make build
 ```
+
+`make` on its own lists every target. Each one is a wrapper around a script in
+`scripts/`, which stays usable on its own with its own flags.
 
 ## Running
 
@@ -68,7 +70,16 @@ icons or logos.
 
 ## Release
 
-Signed, notarized DMG: see `scripts/release/README.md`.
+```bash
+make release                 # asks patch / minor / major
+make release VERSION=0.3.0   # or say it outright
+```
+
+Bumps the version, builds the signed and notarized DMG, tags, pushes and
+creates the GitHub release with the DMG attached. The steps are also available
+one at a time (`make bump`, `make dmg`, `make publish`) so an interrupted
+release can be resumed. One-time signing and notarization setup, and what the
+build actually does: `scripts/release/README.md`.
 
 ## Licensing
 
