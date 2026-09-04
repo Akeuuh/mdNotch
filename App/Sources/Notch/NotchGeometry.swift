@@ -21,6 +21,9 @@ enum NotchGeometry {
     static let gearSize = CGSize(width: 128, height: 34)
     static let zoneCornerRadius: CGFloat = 22
     static let gearCornerRadius: CGFloat = 16
+    /// Floor for the notch-anchored hover strip, so the settings pill stays
+    /// reachable on a screen with neither a notch nor a menu bar.
+    static let minimumHoverStripHeight: CGFloat = 24
 
     static func notchWidth(for screen: NSScreen) -> CGFloat {
         if screen.safeAreaInsets.top > 0,
@@ -31,10 +34,17 @@ enum NotchGeometry {
         return fallbackNotchWidth
     }
 
-    /// Height of the dead strip at the top of the screen: the notch itself,
-    /// or the menu bar on screens without one.
+    /// Height of the strip the notch hides at the top of the screen. Zero on a
+    /// screen without one: nothing is hidden there, so the zone must not
+    /// reserve a dead band the user would see as empty black.
     static func topInset(for screen: NSScreen) -> CGFloat {
-        screen.safeAreaInsets.top > 0 ? screen.safeAreaInsets.top : 24
+        screen.safeAreaInsets.top
+    }
+
+    /// Height of the menu bar on `screen`. Equal to the notch height on a
+    /// screen with one, and zero on a secondary display that shows no menu bar.
+    static func menuBarHeight(for screen: NSScreen) -> CGFloat {
+        screen.frame.maxY - screen.visibleFrame.maxY
     }
 
     /// How far content must sit from the anchored edge. Only the notch hides
@@ -77,8 +87,12 @@ enum NotchGeometry {
     /// patch in the anchored corner.
     static func hoverRegion(for anchor: DropZoneAnchor, on screen: NSScreen) -> NSRect {
         if anchor == .notch {
+            // Without a notch there is no strip to aim at, and a screen with
+            // no menu bar would leave nothing at all: keep a band the pointer
+            // can actually land in.
+            let height = max(topInset(for: screen), menuBarHeight(for: screen), minimumHoverStripHeight)
             return anchoredRect(
-                size: CGSize(width: notchWidth(for: screen) + 80, height: topInset(for: screen)),
+                size: CGSize(width: notchWidth(for: screen) + 80, height: height),
                 anchor: anchor,
                 screen: screen
             )
@@ -210,11 +224,22 @@ enum NotchGeometry {
     }
 
     /// Vertical offset keeping a hover affordance out of the system furniture
-    /// on the anchored edge: the menu bar at the top, the Dock at the bottom
-    /// (zero when it is hidden or on a side).
+    /// on the anchored edge.
     private static func edgeClearance(for anchor: DropZoneAnchor, on screen: NSScreen) -> CGFloat {
-        anchor.isTop
-            ? topInset(for: screen)
-            : screen.visibleFrame.minY - screen.frame.minY
+        switch anchor {
+        case .notch:
+            // Clears only what the notch hides, exactly like the drop zone:
+            // on a screen without one the pill sits flush with the top edge
+            // rather than floating below the menu bar.
+            return topInset(for: screen)
+        case .topLeft, .topRight:
+            // A corner is where the app menus and the status icons live, so
+            // the pill drops below them — a hover must never land on the menu
+            // the user was aiming for.
+            return menuBarHeight(for: screen)
+        case .bottomLeft, .bottomRight:
+            // The Dock, when it is neither hidden nor on a side.
+            return screen.visibleFrame.minY - screen.frame.minY
+        }
     }
 }
