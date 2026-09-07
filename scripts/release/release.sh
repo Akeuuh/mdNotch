@@ -103,6 +103,13 @@ DMG_ROOT="$DIST/dmg-root"
 mkdir -p "$DMG_ROOT"
 ditto "$APP" "$DMG_ROOT/mdNotch.app"
 ln -s /Applications "$DMG_ROOT/Applications"
+# hdiutil attaches the image while creating it, so an already mounted mdNotch
+# volume (a downloaded release, a previous run) makes it fail with
+# "Resource busy" — after the build, the signature and the notarization.
+if [[ -d /Volumes/mdNotch ]]; then
+    echo "==> Detaching the mdNotch volume already mounted"
+    hdiutil detach /Volumes/mdNotch
+fi
 hdiutil create -volname "mdNotch" -srcfolder "$DMG_ROOT" -ov -format UDZO \
     "$DIST/mdNotch.dmg"
 if [[ $SKIP_NOTARIZE -eq 0 ]]; then
