@@ -30,8 +30,8 @@ targets:
         CFBundleDevelopmentRegion: en
         CFBundleDisplayName: mdNotch
         CFBundleIconFile: AppIcon
-        CFBundleShortVersionString: "0.3.0"
-        CFBundleVersion: "4"
+        CFBundleShortVersionString: "0.4.0"
+        CFBundleVersion: "5"
         LSUIElement: true
         LSMinimumSystemVersion: "14.0"
         NSHumanReadableCopyright: ""
