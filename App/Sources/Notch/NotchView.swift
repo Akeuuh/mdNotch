@@ -51,9 +51,10 @@ struct NotchView: View {
 
             case .converting:
                 zone(glowing: true) {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(.white)
+                    VStack(spacing: 9) {
+                        ConversionScan()
+                        ShimmerLabel("Converting\u{2026}")
+                    }
                 }
                 .transition(.move(edge: entryEdge).combined(with: .opacity))
 
@@ -144,6 +145,227 @@ struct NotchView: View {
     }
 }
 
+/// The one palette every animated surface of the zone borrows from, so the
+/// rim light and whatever runs inside it read as a single source of light.
+private enum IntelligenceSpectrum {
+    static let blue = Color(red: 0.35, green: 0.55, blue: 1.00)
+    static let violet = Color(red: 0.68, green: 0.42, blue: 1.00)
+    static let pink = Color(red: 1.00, green: 0.44, blue: 0.74)
+    static let amber = Color(red: 1.00, green: 0.66, blue: 0.38)
+
+    /// Closed loop: the last stop repeats the first so the angular sweep has
+    /// no seam.
+    static let loop: [Color] = [blue, violet, pink, amber, blue]
+
+    /// One accent per document line, so a line keeps its colour across a pass.
+    static let accents: [Color] = [blue, violet, pink, amber, violet]
+}
+
+/// The beat every animation of the converting phase is derived from. A single
+/// period keeps the rim light, the scan and the label on one rhythm — three
+/// unrelated tempos read as noise however good each one is on its own.
+private enum IntelligencePace {
+    static let cycle: TimeInterval = 2.2
+
+    /// Position within the current period, in 0...1, read off the wall clock.
+    /// Deriving from the clock rather than from an animated `@State` keeps
+    /// this immune to the phase transition's transaction, which would
+    /// otherwise override a `repeatForever` and play it exactly once.
+    static func progress(at date: Date) -> Double {
+        date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: cycle) / cycle
+    }
+}
+
+/// Smooth 0...1 ramp with zero slope at both ends. Used wherever a linear
+/// `min(max(…))` would show a corner as an element starts or stops moving.
+private func smoothstep(_ edge0: CGFloat, _ edge1: CGFloat, _ x: CGFloat) -> CGFloat {
+    let t = min(max((x - edge0) / (edge1 - edge0), 0), 1)
+    return t * t * (3 - 2 * t)
+}
+
+/// The conversion itself, drawn: a page of plain text lines with a bar of the
+/// rim light's spectrum sweeping down it. Every line the bar has passed is
+/// markdown — indented behind an accent marker and lit up. Continuous rather
+/// than stepped, so there is nothing to read as a stutter.
+private struct ConversionScan: View {
+    /// Portrait, near enough to paper proportions to read as a page at this
+    /// size without being tall enough to crowd the label under it.
+    private static let pageWidth: CGFloat = 36
+    private static let pageHeight: CGFloat = 46
+    private static let pageCornerRadius: CGFloat = 4.5
+
+    /// Line widths as a fraction of the text column, uneven enough to read as
+    /// prose rather than as a progress bar. The short ones land where a
+    /// paragraph would end.
+    private static let lineWidths: [CGFloat] = [1.0, 0.72, 0.9, 0.55, 0.86, 0.64]
+    private static let lineHeight: CGFloat = 2
+    private static let lineGap: CGFloat = 3.2
+    /// Paper margin. The text column never touches the frame.
+    private static let marginX: CGFloat = 6.5
+    /// How far a converted line slides right to make room for its marker.
+    private static let indent: CGFloat = 4
+    private static let markerWidth: CGFloat = 3
+    /// Vertical distance over which a line changes state. Wider than the gap
+    /// between lines, so neighbours overlap and the change travels as a wave.
+    private static let transition: CGFloat = 7
+    /// Fraction of the period spent travelling. The rest is the pause with the
+    /// bar off the page, during which the lines return to plain text.
+    private static let travelShare: Double = 0.86
+
+    private static var textHeight: CGFloat {
+        CGFloat(lineWidths.count) * lineHeight + CGFloat(lineWidths.count - 1) * lineGap
+    }
+
+    private static var marginY: CGFloat {
+        (pageHeight - textHeight) / 2
+    }
+
+    private var pageShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: Self.pageCornerRadius, style: .continuous)
+    }
+
+    var body: some View {
+        TimelineView(.animation) { context in
+            let progress = IntelligencePace.progress(at: context.date)
+            let travel = min(progress / Self.travelShare, 1)
+            // Runs 0 -> 1 over the tail of the period, unwinding every line at
+            // once while the bar is already past the bottom of the page.
+            let rewind = progress <= Self.travelShare
+                ? 0
+                : smoothstep(0, 1, CGFloat((progress - Self.travelShare) / (1 - Self.travelShare)))
+            // Starts above the page and ends below it, so the first and last
+            // lines are fully converted before the bar is out of sight.
+            let scanY = -Self.transition + CGFloat(travel) * (Self.pageHeight + Self.transition * 2)
+
+            ZStack {
+                ZStack {
+                    text(scanY: scanY, rewind: rewind)
+                    scanBar(scanY: scanY, rewind: rewind)
+                }
+                // Everything happens inside the sheet: light spilling past the
+                // frame would read as a glitch rather than as a page.
+                .clipShape(pageShape)
+
+                pageShape.strokeBorder(.white.opacity(0.28), lineWidth: 1)
+            }
+            .frame(width: Self.pageWidth, height: Self.pageHeight)
+        }
+        .frame(width: Self.pageWidth, height: Self.pageHeight)
+    }
+
+    private func text(scanY: CGFloat, rewind: CGFloat) -> some View {
+        Canvas { context, size in
+            let column = size.width - Self.marginX * 2
+
+            for (index, fraction) in Self.lineWidths.enumerated() {
+                let top = Self.marginY + CGFloat(index) * (Self.lineHeight + Self.lineGap)
+                let middle = top + Self.lineHeight / 2
+                let converted = smoothstep(
+                    middle - Self.transition / 2,
+                    middle + Self.transition / 2,
+                    scanY
+                ) * (1 - rewind)
+
+                let indent = Self.indent * converted
+                let bar = CGRect(
+                    x: Self.marginX + indent,
+                    y: top,
+                    width: (column - indent) * fraction,
+                    height: Self.lineHeight
+                )
+                context.fill(
+                    Path(roundedRect: bar, cornerRadius: Self.lineHeight / 2),
+                    // Plain text sits back in the slab; markdown reads lit.
+                    with: .color(.white.opacity(0.2 + 0.7 * Double(converted)))
+                )
+
+                guard converted > 0 else { continue }
+                let marker = CGRect(
+                    x: Self.marginX,
+                    y: top,
+                    width: Self.markerWidth,
+                    height: Self.lineHeight
+                )
+                context.fill(
+                    Path(roundedRect: marker, cornerRadius: Self.lineHeight / 2),
+                    with: .color(
+                        IntelligenceSpectrum.accents[index % IntelligenceSpectrum.accents.count]
+                            .opacity(Double(converted))
+                    )
+                )
+            }
+        }
+    }
+
+    /// The bar of light doing the work: a tight line over a wide soft halo,
+    /// the same two-pass build as the rim light around the slab.
+    private func scanBar(scanY: CGFloat, rewind: CGFloat) -> some View {
+        let gradient = LinearGradient(
+            colors: [.clear] + IntelligenceSpectrum.loop.dropLast() + [.clear],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+        let alpha = Double(1 - rewind)
+
+        return ZStack {
+            gradient
+                .frame(width: Self.pageWidth, height: 9)
+                .blur(radius: 6)
+                .opacity(alpha * 0.6)
+            gradient
+                .frame(width: Self.pageWidth, height: 1.2)
+                .blur(radius: 1.2)
+                .opacity(alpha)
+        }
+        .position(x: Self.pageWidth / 2, y: scanY)
+    }
+}
+
+/// A label lit by a band of the rim light's own spectrum sweeping across it.
+/// The text under the band stays dim, so the sweep is the only thing moving.
+private struct ShimmerLabel: View {
+    private let key: LocalizedStringKey
+
+    init(_ key: LocalizedStringKey) {
+        self.key = key
+    }
+
+    private var label: some View {
+        Text(key)
+            .font(.system(size: 11.5, weight: .medium, design: .rounded))
+    }
+
+    var body: some View {
+        label
+            .foregroundStyle(.white.opacity(0.4))
+            .overlay {
+                GeometryReader { proxy in
+                    TimelineView(.animation) { context in
+                        let width = proxy.size.width
+                        let progress = CGFloat(IntelligencePace.progress(at: context.date))
+
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: IntelligenceSpectrum.violet, location: 0.3),
+                                .init(color: .white, location: 0.5),
+                                .init(color: IntelligenceSpectrum.pink, location: 0.7),
+                                .init(color: .clear, location: 1),
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: width * 0.9)
+                        // Starts fully off the leading side and ends fully off
+                        // the trailing one, so the wrap is never visible.
+                        .offset(x: (progress * 2 - 1) * width * 1.5)
+                    }
+                }
+                .mask(label)
+            }
+    }
+}
+
 /// Apple-Intelligence-flavoured rim light: a slowly rotating angular
 /// gradient, once as a soft bloom and once as a tight rim, breathing gently.
 private struct IntelligenceGlow: View {
@@ -152,17 +374,9 @@ private struct IntelligenceGlow: View {
     @State private var angle: Double = 0
     @State private var breathing = false
 
-    private static let spectrum: [Color] = [
-        Color(red: 0.35, green: 0.55, blue: 1.00),
-        Color(red: 0.68, green: 0.42, blue: 1.00),
-        Color(red: 1.00, green: 0.44, blue: 0.74),
-        Color(red: 1.00, green: 0.66, blue: 0.38),
-        Color(red: 0.35, green: 0.55, blue: 1.00),
-    ]
-
     var body: some View {
         let gradient = AngularGradient(
-            colors: Self.spectrum,
+            colors: IntelligenceSpectrum.loop,
             center: .center,
             angle: .degrees(angle)
         )
@@ -184,10 +398,12 @@ private struct IntelligenceGlow: View {
                 .blur(radius: 2)
         }
         .onAppear {
-            withAnimation(.linear(duration: 5).repeatForever(autoreverses: false)) {
+            // Four turns of the label sweep per rotation, one breath per
+            // sweep: the rim light shares the beat of what runs inside it.
+            withAnimation(.linear(duration: IntelligencePace.cycle * 4).repeatForever(autoreverses: false)) {
                 angle = 360
             }
-            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+            withAnimation(.easeInOut(duration: IntelligencePace.cycle / 2).repeatForever(autoreverses: true)) {
                 breathing = true
             }
         }
