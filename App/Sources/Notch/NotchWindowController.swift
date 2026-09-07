@@ -19,6 +19,7 @@ final class NotchWindowController {
     private let dragMonitor = DragMonitor()
     private let hoverMonitor = HoverMonitor()
     private var collapseTask: Task<Void, Never>?
+    private var parkTask: Task<Void, Never>?
     private var cancellables: Set<AnyCancellable> = []
 
     private var anchor: DropZoneAnchor { settings.dropZoneAnchor }
@@ -117,9 +118,7 @@ final class NotchWindowController {
         }
         hoverMonitor.start()
 
-        if let screen = screens.targetScreen() {
-            panel.setFrame(NotchGeometry.windowFrame(for: anchor, on: screen), display: false)
-        }
+        park(on: screens.targetScreen())
         panel.orderFrontRegardless()
     }
 
@@ -166,8 +165,13 @@ final class NotchWindowController {
             guard NSMouseInRect(location, NotchGeometry.hoverRegion(for: anchor, on: screen), false) else { return }
             // The pill hangs clear of the notch (or of the menu bar): anything
             // drawn inside the notch itself would be invisible.
-            state.anchor = anchor
+            applyGeometry(on: screen)
+            // The pill hangs below the notch already: nothing to push content
+            // clear of here, and the zone must not park a slab the size of the
+            // cutout in a window that no longer sits on it. Both are restored
+            // by `scheduleRepark` once the pill is gone.
             state.topInset = 0
+            state.collapsedSize = .zero
             reveal(NotchGeometry.gearFrame(for: anchor, on: screen))
             state.phase = .settingsHover
         case .settingsHover:
@@ -185,8 +189,7 @@ final class NotchWindowController {
         if near, let screen, screens.includes(screen) {
             // Never interrupt an ongoing conversion or its feedback.
             guard state.phase == .idle || isDropTarget || state.phase == .settingsHover else { return }
-            state.anchor = anchor
-            state.topInset = NotchGeometry.contentTopInset(for: anchor, on: screen)
+            applyGeometry(on: screen)
             reveal(NotchGeometry.windowFrame(for: anchor, on: screen))
             if state.phase == .idle || state.phase == .settingsHover {
                 state.phase = .dropTarget(hovering: false)
@@ -216,8 +219,28 @@ final class NotchWindowController {
     /// Moves the hidden panel onto `screen`, so the next reveal doesn't
     /// animate in from wherever it was left.
     private func park(on screen: NSScreen?) {
+        // Terminal: whatever repark was pending is moot now.
+        parkTask?.cancel()
         guard let screen else { return }
+        applyGeometry(on: screen)
         panel.setFrame(NotchGeometry.windowFrame(for: anchor, on: screen), display: false)
+    }
+
+    /// Puts the panel back on the zone's own frame once a collapse has played
+    /// out. The settings pill lives in a window of its own, clear of the notch,
+    /// so the zone cannot rest at the cutout's footprint while the pill is out
+    /// — `mouseMoved` zeroes it. Without this the zone would still be resting
+    /// at nothing when the next reveal expands it, and would grow out of a
+    /// point instead of out of the notch. Deferred rather than immediate:
+    /// moving the panel mid-collapse teleports the pill still fading out.
+    private func scheduleRepark() {
+        parkTask?.cancel()
+        parkTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(NotchAnimation.settle))
+            guard !Task.isCancelled, let self, self.state.phase == .idle else { return }
+            self.parkTask = nil
+            self.park(on: self.screens.targetScreen())
+        }
     }
 
     /// Brings the zone out on the active screen when nothing is showing yet.
@@ -228,16 +251,28 @@ final class NotchWindowController {
         switch state.phase {
         case .idle, .settingsHover:
             guard let screen = screens.targetScreen() else { return }
-            state.anchor = anchor
-            state.topInset = NotchGeometry.contentTopInset(for: anchor, on: screen)
+            applyGeometry(on: screen)
             reveal(NotchGeometry.windowFrame(for: anchor, on: screen))
         default:
             return
         }
     }
 
+    /// Feeds the view the two footprints it interpolates between, plus the
+    /// strip the notch hides. Must run before the phase changes: the zone
+    /// grows from `collapsedSize`, so a stale one would have it grow from the
+    /// previous screen's notch.
+    private func applyGeometry(on screen: NSScreen) {
+        state.anchor = anchor
+        state.topInset = NotchGeometry.contentTopInset(for: anchor, on: screen)
+        state.collapsedSize = NotchGeometry.collapsedZoneSize(for: anchor, on: screen)
+        state.expandedSize = NotchGeometry.zoneSize(for: anchor, on: screen)
+    }
+
     /// Positions the panel and makes it interactive.
     private func reveal(_ frame: NSRect) {
+        // What is coming out owns the panel's frame now.
+        parkTask?.cancel()
         panel.setFrame(frame, display: true)
         panel.ignoresMouseEvents = false
         panel.orderFrontRegardless()
@@ -269,6 +304,7 @@ final class NotchWindowController {
         collapseTask?.cancel()
         state.phase = .idle
         panel.ignoresMouseEvents = true
+        scheduleRepark()
     }
 }
 

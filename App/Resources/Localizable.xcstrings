@@ -360,6 +360,16 @@
           }
         }
       }
+    },
+    "Converting…" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversion…"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

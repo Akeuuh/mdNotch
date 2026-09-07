@@ -21,6 +21,11 @@ enum NotchGeometry {
     static let gearSize = CGSize(width: 128, height: 34)
     static let zoneCornerRadius: CGFloat = 22
     static let gearCornerRadius: CGFloat = 16
+    /// Corner radius of the physical notch cutout. AppKit exposes the notch's
+    /// bounds but not its rounding, so this is measured rather than queried —
+    /// the corners of the zone that sit on a screen edge use it, so the zone
+    /// reads as the cutout it grows out of.
+    static let physicalNotchCornerRadius: CGFloat = 10
     /// Floor for the notch-anchored hover strip, so the settings pill stays
     /// reachable on a screen with neither a notch nor a menu bar.
     static let minimumHoverStripHeight: CGFloat = 24
@@ -52,6 +57,17 @@ enum NotchGeometry {
     /// content can use the whole slab.
     static func contentTopInset(for anchor: DropZoneAnchor, on screen: NSScreen) -> CGFloat {
         anchor == .notch ? topInset(for: screen) : 0
+    }
+
+    /// Footprint the zone grows out of. Under the notch this is the cutout
+    /// itself, so the zone starts life the exact shape of the hardware. A
+    /// corner has no such shape: it seeds a flat sliver on the anchored edge,
+    /// which unrolls from that edge instead.
+    static func collapsedZoneSize(for anchor: DropZoneAnchor, on screen: NSScreen) -> CGSize {
+        guard anchor == .notch else {
+            return CGSize(width: cornerZoneSize.width * 0.55, height: 0)
+        }
+        return CGSize(width: notchWidth(for: screen), height: topInset(for: screen))
     }
 
     static func zoneSize(for anchor: DropZoneAnchor, on screen: NSScreen) -> CGSize {
@@ -128,17 +144,6 @@ enum NotchGeometry {
 
     // MARK: - SwiftUI layout
 
-    /// Transparent bleed inside the window, as insets the slab is padded by.
-    /// Mirrors what `bleeding(_:for:)` added to the window frame.
-    static func slabPadding(for anchor: DropZoneAnchor) -> EdgeInsets {
-        EdgeInsets(
-            top: anchor.isTop ? 0 : glowPadding,
-            leading: anchor.horizontal == .leading ? 0 : glowPadding,
-            bottom: anchor.isTop ? glowPadding : 0,
-            trailing: anchor.horizontal == .trailing ? 0 : glowPadding
-        )
-    }
-
     static func slabAlignment(for anchor: DropZoneAnchor) -> Alignment {
         switch (anchor.isTop, anchor.horizontal) {
         case (true, .center): return .top
@@ -147,6 +152,38 @@ enum NotchGeometry {
         case (false, .center): return .bottom
         case (false, .leading): return .bottomLeading
         case (false, .trailing): return .bottomTrailing
+        }
+    }
+
+    /// Corners of a corner-anchored drop zone. The one facing into the screen
+    /// carries the zone's own radius; the ones lying along a screen edge
+    /// borrow the physical notch's; the one sitting in an actual screen corner
+    /// stays square, against the bezel. The notch anchor does not use this —
+    /// it flares into the top edge instead, see `NotchFlareShape`.
+    static func zoneCornerRadii(for anchor: DropZoneAnchor) -> RectangleCornerRadii {
+        let inward = zoneCornerRadius
+        let edge = physicalNotchCornerRadius
+        switch anchor {
+        case .notch:
+            return RectangleCornerRadii(
+                topLeading: edge, bottomLeading: inward, bottomTrailing: inward, topTrailing: edge
+            )
+        case .topLeft:
+            return RectangleCornerRadii(
+                topLeading: 0, bottomLeading: edge, bottomTrailing: inward, topTrailing: edge
+            )
+        case .topRight:
+            return RectangleCornerRadii(
+                topLeading: edge, bottomLeading: inward, bottomTrailing: edge, topTrailing: 0
+            )
+        case .bottomLeft:
+            return RectangleCornerRadii(
+                topLeading: edge, bottomLeading: 0, bottomTrailing: edge, topTrailing: inward
+            )
+        case .bottomRight:
+            return RectangleCornerRadii(
+                topLeading: inward, bottomLeading: edge, bottomTrailing: 0, topTrailing: edge
+            )
         }
     }
 
