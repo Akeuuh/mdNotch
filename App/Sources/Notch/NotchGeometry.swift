@@ -54,6 +54,17 @@ enum NotchGeometry {
         anchor == .notch ? topInset(for: screen) : 0
     }
 
+    /// Footprint the zone grows out of. Under the notch this is the cutout
+    /// itself, so the zone starts life the exact shape of the hardware. A
+    /// corner has no such shape: it seeds a flat sliver on the anchored edge,
+    /// which unrolls from that edge instead.
+    static func collapsedZoneSize(for anchor: DropZoneAnchor, on screen: NSScreen) -> CGSize {
+        guard anchor == .notch else {
+            return CGSize(width: cornerZoneSize.width * 0.55, height: 0)
+        }
+        return CGSize(width: notchWidth(for: screen), height: topInset(for: screen))
+    }
+
     static func zoneSize(for anchor: DropZoneAnchor, on screen: NSScreen) -> CGSize {
         guard anchor == .notch else { return cornerZoneSize }
         return CGSize(
@@ -127,17 +138,6 @@ enum NotchGeometry {
     }
 
     // MARK: - SwiftUI layout
-
-    /// Transparent bleed inside the window, as insets the slab is padded by.
-    /// Mirrors what `bleeding(_:for:)` added to the window frame.
-    static func slabPadding(for anchor: DropZoneAnchor) -> EdgeInsets {
-        EdgeInsets(
-            top: anchor.isTop ? 0 : glowPadding,
-            leading: anchor.horizontal == .leading ? 0 : glowPadding,
-            bottom: anchor.isTop ? glowPadding : 0,
-            trailing: anchor.horizontal == .trailing ? 0 : glowPadding
-        )
-    }
 
     static func slabAlignment(for anchor: DropZoneAnchor) -> Alignment {
         switch (anchor.isTop, anchor.horizontal) {

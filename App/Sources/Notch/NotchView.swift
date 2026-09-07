@@ -1,5 +1,14 @@
 import SwiftUI
 
+/// The one spring every phase change of the zone plays with, plus how long the
+/// controller has to leave the panel alone for it to finish.
+enum NotchAnimation {
+    static let phase: Animation = .spring(response: 0.36, dampingFraction: 0.74)
+    /// Comfortably past the spring's visible travel. Moving the panel's frame
+    /// before this teleports whatever is still animating inside it.
+    static let settle: TimeInterval = 0.45
+}
+
 /// Thin visual layer over `NotchState`. No business logic here.
 struct NotchView: View {
     @ObservedObject var state: NotchState
@@ -26,102 +35,129 @@ struct NotchView: View {
         state.anchor.isTop ? 1 : -1
     }
 
+    private var isHovering: Bool {
+        state.phase == .dropTarget(hovering: true)
+    }
+
+    private var isConverting: Bool {
+        state.phase == .converting
+    }
+
     var body: some View {
         ZStack(alignment: NotchGeometry.slabAlignment(for: state.anchor)) {
-            switch state.phase {
-            case .idle:
-                Color.clear
+            // Always mounted. Inserting it on demand would pop it in at full
+            // size; kept in the tree, its frame interpolates and the zone
+            // grows out of the notch's own footprint.
+            zone
 
-            case .settingsHover:
+            if state.phase == .settingsHover {
                 gearPill
                     .transition(.opacity.combined(with: .move(edge: entryEdge)))
-
-            case .dropTarget(let hovering):
-                zone(hovering: hovering) {
-                    VStack(spacing: 7) {
-                        Image(systemName: "arrow.down.doc.fill")
-                            .font(.system(size: 20, weight: .semibold))
-                            .symbolRenderingMode(.hierarchical)
-                        Text("Drop to convert")
-                            .font(.system(size: 11.5, weight: .medium, design: .rounded))
-                    }
-                    .foregroundStyle(.white.opacity(hovering ? 1 : 0.72))
-                }
-                .transition(.move(edge: entryEdge).combined(with: .opacity))
-
-            case .converting:
-                zone(glowing: true) {
-                    VStack(spacing: 9) {
-                        ConversionScan()
-                        ShimmerLabel("Converting\u{2026}")
-                    }
-                }
-                .transition(.move(edge: entryEdge).combined(with: .opacity))
-
-            case .success(let message):
-                zone {
-                    VStack(spacing: 7) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(.white, Color.green)
-                        Text(message)
-                            .font(.system(size: 11.5, weight: .medium, design: .rounded))
-                            .foregroundStyle(.white)
-                    }
-                }
-                .transition(.move(edge: entryEdge).combined(with: .opacity))
-
-            case .failure(let message):
-                zone {
-                    VStack(spacing: 7) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(.white, Color.red)
-                        Text(message)
-                            .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.9))
-                            .lineLimit(2)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 14)
-                    }
-                }
-                .transition(.move(edge: entryEdge).combined(with: .opacity))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: NotchGeometry.slabAlignment(for: state.anchor))
-        .animation(.spring(response: 0.34, dampingFraction: 0.82), value: state.phase)
+        .animation(NotchAnimation.phase, value: state.phase)
         // Geometry here is computed in screen coordinates, so the leading
         // side must stay the left one whatever the system language.
         .environment(\.layoutDirection, .leftToRight)
     }
 
-    /// The black slab hanging off the anchored edge. `content` is centered in
-    /// the visible part; anything behind the notch is never seen.
-    private func zone<Content: View>(
-        hovering: Bool = false,
-        glowing: Bool = false,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
+    /// The black slab hanging off the anchored edge, sized to whatever the
+    /// current phase asks for.
+    private var zone: some View {
+        let size = state.isExtended ? state.expandedSize : state.collapsedSize
+
+        return slab(zoneShape)
+            .scaleEffect(isHovering ? 1.015 : 1, anchor: NotchGeometry.scaleAnchor(for: state.anchor))
+            .frame(width: size.width, height: size.height)
+    }
+
+    private func slab(_ shape: UnevenRoundedRectangle) -> some View {
         ZStack {
             // Behind the slab, so it reads as light spilling out from
             // under the notch rather than a border drawn on top.
-            if glowing {
-                IntelligenceGlow(shape: zoneShape)
+            if isConverting {
+                IntelligenceGlow(shape: shape)
             }
 
-            zoneShape
+            shape
                 .fill(.black)
                 .overlay(
-                    zoneShape.strokeBorder(.white.opacity(0.09), lineWidth: 0.5)
+                    // Collapsed, the slab covers the cutout exactly: a rim on
+                    // it would outline the hardware notch permanently.
+                    shape.strokeBorder(.white.opacity(state.isExtended ? 0.09 : 0), lineWidth: 0.5)
                 )
-                // The drop shadow would muddy the glow it sits on.
-                .shadow(color: glowing ? .clear : .black.opacity(0.35), radius: 14, y: shadowDrop * 8)
+                // Same reason for the shadow, which would otherwise spill onto
+                // the menu bar at rest. The glow it sits on would muddy it too.
+                .shadow(
+                    color: isConverting || !state.isExtended ? .clear : .black.opacity(0.35),
+                    radius: 14,
+                    y: shadowDrop * 8
+                )
 
-            content()
+            phaseContent
                 .padding(.top, state.topInset)
+                // Blown up to the slab before clipping: `clipShape` works in
+                // the bounds of what it is attached to, so on the bare content
+                // it would cut the label to the shape's own inset body.
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // While the zone is still near the notch's size there is no
+                // room for the content: it must not spill over the menu bar
+                // on the way out.
+                .clipShape(shape)
+                .opacity(state.isExtended ? 1 : 0)
         }
-        .scaleEffect(hovering ? 1.015 : 1, anchor: NotchGeometry.scaleAnchor(for: state.anchor))
-        .padding(NotchGeometry.slabPadding(for: state.anchor))
+    }
+
+    @ViewBuilder
+    private var phaseContent: some View {
+        switch state.phase {
+        case .idle, .settingsHover:
+            Color.clear
+
+        case .dropTarget(let hovering):
+            VStack(spacing: 7) {
+                Image(systemName: "arrow.down.doc.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .symbolRenderingMode(.hierarchical)
+                Text("Drop to convert")
+                    .font(.system(size: 11.5, weight: .medium, design: .rounded))
+            }
+            .foregroundStyle(.white.opacity(hovering ? 1 : 0.72))
+            .transition(.opacity)
+
+        case .converting:
+            VStack(spacing: 9) {
+                ConversionScan()
+                ShimmerLabel("Converting\u{2026}")
+            }
+            .transition(.opacity)
+
+        case .success(let message):
+            VStack(spacing: 7) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white, Color.green)
+                Text(message)
+                    .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white)
+            }
+            .transition(.opacity)
+
+        case .failure(let message):
+            VStack(spacing: 7) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white, Color.red)
+                Text(message)
+                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 14)
+            }
+            .transition(.opacity)
+        }
     }
 
     /// Settings affordance: a small slab hanging off the anchored edge.
