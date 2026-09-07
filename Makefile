@@ -82,9 +82,13 @@ publish:
 	scripts/release/publish.sh $(VERSION)
 
 # The order matters: the version has to be in project.yml before the DMG is
-# built, or the shipped app reports the previous one.
+# built, or the shipped app reports the previous one. Everything release.sh
+# needs is checked up front, because bump commits: finding out at the DMG step
+# that a variable is missing leaves a bump commit behind for nothing.
 release:
 	@[[ -x "$(FROZEN)/markitdown-bin" ]] || { echo "error: frozen binary missing — run make freeze first" >&2; exit 1; }
+	@[[ -n "$$DEVELOPER_ID_APP" ]] || { echo "error: DEVELOPER_ID_APP is not set (e.g. 'Developer ID Application: Jane Doe (TEAMID)')" >&2; exit 1; }
+	@[[ -n "$$NOTARY_PROFILE" ]] || { echo "error: NOTARY_PROFILE is not set (create one with: xcrun notarytool store-credentials)" >&2; exit 1; }
 	$(MAKE) bump VERSION=$(VERSION)
 	$(MAKE) dmg
 	$(MAKE) publish
