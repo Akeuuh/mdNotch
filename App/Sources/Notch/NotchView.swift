@@ -13,12 +13,6 @@ enum NotchAnimation {
 struct NotchView: View {
     @ObservedObject var state: NotchState
 
-    private var zoneShape: UnevenRoundedRectangle {
-        UnevenRoundedRectangle(
-            cornerRadii: NotchGeometry.cornerRadii(for: state.anchor, radius: NotchGeometry.zoneCornerRadius)
-        )
-    }
-
     private var gearShape: UnevenRoundedRectangle {
         UnevenRoundedRectangle(
             cornerRadii: NotchGeometry.cornerRadii(for: state.anchor, radius: NotchGeometry.gearCornerRadius)
@@ -63,16 +57,34 @@ struct NotchView: View {
     }
 
     /// The black slab hanging off the anchored edge, sized to whatever the
-    /// current phase asks for.
+    /// current phase asks for. The shape stays a concrete type on both
+    /// branches: erasing it to `AnyShape` would drop its `animatableData` and
+    /// the corners would snap instead of opening with the rest.
+    @ViewBuilder
     private var zone: some View {
         let size = state.isExtended ? state.expandedSize : state.collapsedSize
 
-        return slab(zoneShape)
-            .scaleEffect(isHovering ? 1.015 : 1, anchor: NotchGeometry.scaleAnchor(for: state.anchor))
-            .frame(width: size.width, height: size.height)
+        Group {
+            if state.anchor == .notch {
+                slab(
+                    NotchFlareShape(
+                        // Collapsed, no flare and the cutout's own corners:
+                        // the shape is the hardware's and nothing else.
+                        flare: state.isExtended ? NotchGeometry.physicalNotchCornerRadius : 0,
+                        bottom: state.isExtended
+                            ? NotchGeometry.zoneCornerRadius
+                            : NotchGeometry.physicalNotchCornerRadius
+                    )
+                )
+            } else {
+                slab(UnevenRoundedRectangle(cornerRadii: NotchGeometry.zoneCornerRadii(for: state.anchor)))
+            }
+        }
+        .scaleEffect(isHovering ? 1.015 : 1, anchor: NotchGeometry.scaleAnchor(for: state.anchor))
+        .frame(width: size.width, height: size.height)
     }
 
-    private func slab(_ shape: UnevenRoundedRectangle) -> some View {
+    private func slab<S: Shape>(_ shape: S) -> some View {
         ZStack {
             // Behind the slab, so it reads as light spilling out from
             // under the notch rather than a border drawn on top.
@@ -85,7 +97,7 @@ struct NotchView: View {
                 .overlay(
                     // Collapsed, the slab covers the cutout exactly: a rim on
                     // it would outline the hardware notch permanently.
-                    shape.strokeBorder(.white.opacity(state.isExtended ? 0.09 : 0), lineWidth: 0.5)
+                    shape.stroke(.white.opacity(state.isExtended ? 0.09 : 0), lineWidth: 0.5)
                 )
                 // Same reason for the shadow, which would otherwise spill onto
                 // the menu bar at rest. The glow it sits on would muddy it too.
@@ -402,10 +414,85 @@ private struct ShimmerLabel: View {
     }
 }
 
+/// The zone as it hangs off the notch. Its two top corners are inverted
+/// fillets: the body is inset from the full width, and each side sweeps back
+/// out to meet the screen edge tangentially — the way the cutout flares into
+/// the bezel, rather than a rectangle butted against it. The bottom corners
+/// are ordinary convex ones facing into the screen.
+private struct NotchFlareShape: Shape {
+    /// Radius of the inverted fillet joining the body to the screen edge.
+    var flare: CGFloat
+    /// Radius of the two corners facing into the screen.
+    var bottom: CGFloat
+
+    /// Control points at `k * r` put a cubic within a thousandth of a true
+    /// quarter arc. Cheaper to reason about here than `addArc`, whose
+    /// `clockwise` flag is measured in a flipped coordinate space.
+    private static let k: CGFloat = 0.5523
+
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(flare, bottom) }
+        set {
+            flare = newValue.first
+            bottom = newValue.second
+        }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let width = rect.width
+        let height = rect.height
+        // Clamped so a half-open zone, mid-animation, can never fold on itself.
+        let flare = max(0, min(self.flare, width / 2, height))
+        let bottom = max(0, min(self.bottom, (width - flare * 2) / 2, height - flare))
+        let kFlare = Self.k * flare
+        let kBottom = Self.k * bottom
+
+        var path = Path()
+        // Starts on the screen edge, tangent to it, so the flare leaves the
+        // edge without a crease.
+        path.move(to: CGPoint(x: 0, y: 0))
+        if flare > 0 {
+            path.addCurve(
+                to: CGPoint(x: flare, y: flare),
+                control1: CGPoint(x: kFlare, y: 0),
+                control2: CGPoint(x: flare, y: flare - kFlare)
+            )
+        }
+        path.addLine(to: CGPoint(x: flare, y: height - bottom))
+        if bottom > 0 {
+            path.addCurve(
+                to: CGPoint(x: flare + bottom, y: height),
+                control1: CGPoint(x: flare, y: height - bottom + kBottom),
+                control2: CGPoint(x: flare + bottom - kBottom, y: height)
+            )
+        }
+        path.addLine(to: CGPoint(x: width - flare - bottom, y: height))
+        if bottom > 0 {
+            path.addCurve(
+                to: CGPoint(x: width - flare, y: height - bottom),
+                control1: CGPoint(x: width - flare - bottom + kBottom, y: height),
+                control2: CGPoint(x: width - flare, y: height - bottom + kBottom)
+            )
+        }
+        path.addLine(to: CGPoint(x: width - flare, y: flare))
+        if flare > 0 {
+            path.addCurve(
+                to: CGPoint(x: width, y: 0),
+                control1: CGPoint(x: width - flare, y: flare - kFlare),
+                control2: CGPoint(x: width - kFlare, y: 0)
+            )
+        }
+        // Back along the screen edge.
+        path.closeSubpath()
+
+        return path.applying(CGAffineTransform(translationX: rect.minX, y: rect.minY))
+    }
+}
+
 /// Apple-Intelligence-flavoured rim light: a slowly rotating angular
 /// gradient, once as a soft bloom and once as a tight rim, breathing gently.
-private struct IntelligenceGlow: View {
-    let shape: UnevenRoundedRectangle
+private struct IntelligenceGlow<S: Shape>: View {
+    let shape: S
 
     @State private var angle: Double = 0
     @State private var breathing = false
